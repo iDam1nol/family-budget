@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Семья">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<title>Семейный бюджет</title>
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--ink:#17201e;--mute:#6b7773;--line:#e3e8e6;--brand:#0f766e;--brand-ink:#fff;--bad:#c2410c;--good:#15803d;--warn:#b45309}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1413;--card:#172120;--ink:#e8efed;--mute:#8fa09b;--line:#263230;--brand:#2dd4bf;--brand-ink:#04211e;--bad:#fb923c;--good:#4ade80;--warn:#fbbf24}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px}
+h1{font-size:20px;margin:8px 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+.mute{color:var(--mute);font-size:14px}
+input,select,button{font:inherit;color:inherit}
+input,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);margin:6px 0}
+button{border:0;border-radius:10px;padding:12px 16px;background:var(--brand);color:var(--brand-ink);font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button.link{background:none;color:var(--brand);padding:6px;font-weight:500}
+button.full{width:100%;margin-top:8px}
+.seg{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px}
+.seg button{background:var(--card);color:var(--ink);border:1px solid var(--line);padding:8px 12px;white-space:nowrap;font-weight:500}
+.seg button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.monthbar{display:flex;align-items:center;justify-content:space-between}
+.monthbar b{text-transform:capitalize}
+.monthbar button{padding:8px 14px}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.sum b{display:block;font-size:17px}
+.day{font-size:13px;color:var(--mute);margin:14px 2px 4px;text-transform:uppercase;letter-spacing:.04em}
+.tx{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line)}
+.tx:last-child{border:0}
+.tx .amt{font-weight:600;white-space:nowrap}
+.amt.inc{color:var(--good)}
+.badge{display:inline-block;font-size:12px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mute);margin-left:4px}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--brand)}
+.bar i.warn{background:var(--warn)}.bar i.bad{background:var(--bad)}
+.cat{padding:12px 0;border-bottom:1px solid var(--line)}
+.cat:last-child{border:0}
+.row{display:flex;justify-content:space-between;gap:8px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;color:var(--mute);border-radius:0;padding:14px 4px;font-weight:500}
+nav button.on{color:var(--brand)}
+.fab{position:fixed;right:18px;bottom:calc(22px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;font-size:30px;line-height:1;padding:0;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet{background:var(--card);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+.big{font-size:28px;font-weight:700}
+.err{color:var(--bad);font-size:14px;min-height:20px}
+.empty{text-align:center;color:var(--mute);padding:28px 8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.tile{border:0;border-radius:26px;aspect-ratio:1/1;padding:16px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;text-align:left;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.tile:active{transform:scale(.97)}
+.tile svg{width:46px;height:46px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tile b{display:block;font-size:19px;font-weight:700}
+.tile span{display:block;font-size:13px;font-weight:500;opacity:.92;margin-top:2px}
+.t1{background:linear-gradient(145deg,#14b8a6,#0f766e)}
+.t2{background:linear-gradient(145deg,#f59e0b,#c2410c)}
+.t3{background:linear-gradient(145deg,#8b5cf6,#5b21b6)}
+.t4{background:linear-gradient(145deg,#22c55e,#15803d)}
+.pi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.pi:last-child{border:0}
+.pi .amt{font-weight:600;text-align:right}
+.txt-bad{color:var(--bad)}.txt-warn{color:var(--warn)}.txt-good{color:var(--good)}
+.top{display:flex;align-items:center;gap:10px;margin:4px 0 6px}
+.top button{padding:8px 12px}
+.top b{font-size:19px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ====== НАСТРОЙКА: вставьте данные вашего проекта Supabase ======
+const SUPABASE_URL = 'https://ykyxcsuuflwavetdeodi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_0LkdL2668ZJFuKinRxJJUw_PMGEi1Co';
+// ================================================================
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 0}).format(Math.round(n)) + ' ₽';
+const pad = n => String(n).padStart(2, '0');
+const today = () => new Date().toLocaleDateString('sv');
+
+const S = { user: null, me: null, members: [], household: null, cats: [], tx: [],
+            month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            filter: 'all', tab: 'home', booted: false,
+            products: [], pantry: [], staples: [], stores: [], prices: [], foodReady: false, sub: 'stock' };
+
+function monthRange() {
+  const y = S.month.getFullYear(), m = S.month.getMonth();
+  const a = `${y}-${pad(m + 1)}-01`;
+  const ny = m === 11 ? y + 1 : y, nm = m === 11 ? 1 : m + 2;
+  return [a, `${ny}-${pad(nm)}-01`];
+}
+const monthLabel = () => S.month.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+const nameOf = id => (S.members.find(m => m.user_id === id) || {}).name || '—';
+const partner = () => S.members.find(m => m.user_id !== S.user.id);
+
+// ---------- загрузка ----------
+async function load() {
+  const { data: ms, error } = await sb.from('members').select('*');
+  if (error) return fail(error);
+  S.members = ms || [];
+  S.me = S.members.find(m => m.user_id === S.user.id);
+  if (!S.me) return renderOnboarding();
+  const { data: h } = await sb.from('households').select('*').limit(1).single();
+  S.household = h;
+  await refresh();
+  if (!S.booted) { S.booted = true; subscribe(); }
+}
+
+async function refresh() {
+  const [from, to] = monthRange();
+  const [c, t, m, pr, pa, sp, sr, pc] = await Promise.all([
+    sb.from('categories').select('*').order('name'),
+    sb.from('transactions').select('*').gte('date', from).lt('date', to)
+      .order('date', { ascending: false }).order('created_at', { ascending: false }),
+    sb.from('members').select('*'),
+    sb.from('products').select('*').order('name'),
+    sb.from('pantry_items').select('*'),
+    sb.from('staples').select('*'),
+    sb.from('stores').select('*').order('name'),
+    sb.from('prices').select('*')
+  ]);
+  if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
+  S.cats = c.data; S.tx = t.data; S.members = m.data;
+  S.foodReady = !(pr.error || pa.error || sp.error || sr.error || pc.error);
+  S.products = S.foodReady ? pr.data : [];
+  S.pantry = S.foodReady ? pa.data : [];
+  S.staples = S.foodReady ? sp.data : [];
+  S.stores = S.foodReady ? sr.data : [];
+  S.prices = S.foodReady ? pc.data : [];
+  render();
+}
+
+function subscribe() {
+  let timer = null;
+  const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
+  let ch = sb.channel('household-live');
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices'].forEach(tb => {
+    ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
+  });
+  ch.subscribe();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me) refresh(); });
+}
+
+function fail(e) {
+  $('#app').innerHTML = `<div class="wrap"><div class="card"><b>Ошибка</b><p class="err">${esc(e.message || e)}</p>
+    <button class="full" onclick="location.reload()">Обновить</button></div></div>`;
+}
+
+// ---------- вход ----------
+function renderAuth(mode = 'in', msg = '') {
+  $('#app').innerHTML = `<div class="wrap"><h1>Семейный бюджет</h1>
+  <div class="card">
+    <b>${mode === 'in' ? 'Вход' : 'Регистрация'}</b>
+    <input id="em" type="email" placeholder="Email" autocomplete="email">
+    <input id="pw" type="password" placeholder="Пароль (минимум 6 символов)" autocomplete="${mode === 'in' ? 'current-password' : 'new-password'}">
+    <div class="err" id="err">${esc(msg)}</div>
+    <button class="full" id="go">${mode === 'in' ? 'Войти' : 'Создать аккаунт'}</button>
+    <button class="link full" id="sw">${mode === 'in' ? 'Нет аккаунта? Регистрация' : 'Уже есть аккаунт? Войти'}</button>
+  </div></div>`;
+  $('#sw').onclick = () => renderAuth(mode === 'in' ? 'up' : 'in');
+  $('#go').onclick = async () => {
+    const email = $('#em').value.trim(), password = $('#pw').value;
+    const fn = mode === 'in' ? sb.auth.signInWithPassword.bind(sb.auth) : sb.auth.signUp.bind(sb.auth);
+    const { data, error } = await fn({ email, password });
+    if (error) { $('#err').textContent = error.message; return; }
+    if (mode === 'up' && !data.session) { renderAuth('in', 'Аккаунт создан. Подтвердите email по письму и войдите.'); }
+  };
+}
+
+function renderOnboarding() {
+  $('#app').innerHTML = `<div class="wrap"><h1>Настройка семьи</h1>
+  <div class="card"><b>Я первый — создаю семью</b>
+    <input id="n1" placeholder="Ваше имя (например, Вадим)">
+    <input id="hn" placeholder="Название семьи" value="Наша семья">
+    <button class="full" id="mk">Создать</button></div>
+  <div class="card"><b>Меня пригласили</b>
+    <input id="n2" placeholder="Ваше имя">
+    <input id="cd" placeholder="Код приглашения">
+    <button class="full" id="jn">Присоединиться</button></div>
+  <div class="err" id="err"></div>
+  <button class="link" id="lo">Выйти</button></div>`;
+  $('#lo').onclick = () => sb.auth.signOut();
+  $('#mk').onclick = async () => {
+    const uname = $('#n1').value.trim(); if (!uname) return $('#err').textContent = 'Введите имя';
+    const { error } = await sb.rpc('create_household', { hname: $('#hn').value.trim() || 'Семья', uname });
+    if (error) return $('#err').textContent = error.message;
+    S.tab = 'more'; load();
+  };
+  $('#jn').onclick = async () => {
+    const uname = $('#n2').value.trim(), code = $('#cd').value.trim();
+    if (!uname || !code) return $('#err').textContent = 'Введите имя и код';
+    const { error } = await sb.rpc('join_household', { code, uname });
+    if (error) return $('#err').textContent = error.message === 'bad code' ? 'Неверный код' : error.message;
+    load();
+  };
+}
+
+// ---------- главный экран ----------
+function visibleTx() {
+  const me = S.user.id, p = partner();
+  return S.tx.filter(t =>
+    S.filter === 'all' ? true :
+    S.filter === 'shared' ? t.shared :
+    S.filter === 'mine' ? (!t.shared && t.user_id === me) :
+    (!t.shared && p && t.user_id === p.user_id));
+}
+
+const ICONS = {
+  tx: '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+  lim: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12V3"/><path d="M12 12l6.4 6.4"/></svg>',
+  food: '<svg viewBox="0 0 24 24"><path d="M3 9h18l-2 11H5z"/><path d="M8 9l3-5M16 9l-3-5"/></svg>',
+  more: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.9.3 5 2.6 5 5.8"/></svg>'
+};
+
+function go(tab) {
+  if (tab === 'home') {
+    if (history.state && history.state.t) history.back();
+    else { S.tab = 'home'; render(); }
+    return;
+  }
+  S.tab = tab;
+  history.pushState({ t: tab }, '');
+  render();
+}
+window.addEventListener('popstate', e => {
+  S.tab = (e.state && e.state.t) || 'home';
+  if (S.me) render();
+});
+
+const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
+
+function render() {
+  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', more: 'Семья' };
+  let body = '';
+  if (S.tab === 'home') body = renderHome();
+  else {
+    body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b></div>`;
+    if (S.tab === 'tx') body += monthBar() + renderTx();
+    else if (S.tab === 'lim') body += monthBar() + renderLimits();
+    else if (S.tab === 'food') body += renderFood();
+    else body += renderMore();
+  }
+  $('#app').innerHTML = `<div class="wrap">${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
+  if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
+  if ($('#add')) $('#add').onclick = () => S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : openAdd();
+  if ($('#bk')) $('#bk').onclick = () => go('home');
+  $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
+  bindTab();
+}
+
+function renderHome() {
+  const inc = S.tx.filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
+  const exp = S.tx.filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
+  const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
+  return `<h1>Привет, ${esc(S.me.name)}</h1>
+  ${monthBar()}
+  <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
+  <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
+  <div><span class="mute">Баланс</span><b>${fmt(inc - exp)}</b></div></div>
+  <div class="grid">
+    <button class="tile t1" data-t="tx">${ICONS.tx}<div><b>Операции</b><span>Записей: ${S.tx.length}</span></div></button>
+    <button class="tile t2" data-t="lim">${ICONS.lim}<div><b>Лимиты</b><span>Задано: ${limits}</span></div></button>
+    <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? 'Докупить: ' + missing().length : 'нужно обновить базу'}</span></div></button>
+    <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${esc(S.members.map(m => m.name).join(', '))}</span></div></button>
+  </div>`;
+}
+
+function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); refresh(); }
+
+function renderTx() {
+  const p = partner();
+  const seg = [['all', 'Все'], ['shared', 'Общие'], ['mine', 'Мои'], ['other', p ? p.name : 'Партнёр']]
+    .map(([k, l]) => `<button data-f="${k}" class="${S.filter === k ? 'on' : ''}">${esc(l)}</button>`).join('');
+  const list = visibleTx();
+  const inc = list.filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
+  const exp = list.filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
+  let rows = '', last = '';
+  for (const t of list) {
+    if (t.date !== last) {
+      last = t.date;
+      rows += `<div class="day">${new Date(t.date + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' })}</div>`;
+    }
+    const cat = S.cats.find(c => c.id === t.category_id);
+    rows += `<div class="tx" data-id="${t.id}"><div>
+      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}</div>
+      <div class="mute">${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
+      <div class="amt ${t.kind === 'income' ? 'inc' : ''}">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div></div>`;
+  }
+  return `<div class="seg">${seg}</div>
+  <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
+  <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
+  <div><span class="mute">Баланс</span><b>${fmt(inc - exp)}</b></div></div>
+  <div class="card">${rows || '<div class="empty">Операций нет.<br>Нажмите + чтобы добавить.</div>'}</div>`;
+}
+
+function renderLimits() {
+  const spent = {};
+  S.tx.filter(t => t.kind === 'expense').forEach(t => spent[t.category_id] = (spent[t.category_id] || 0) + +t.amount);
+  const cats = S.cats.filter(c => c.kind === 'expense');
+  const total = cats.reduce((s, c) => s + +c.monthly_limit, 0);
+  const totalSpent = Object.values(spent).reduce((a, b) => a + b, 0);
+  const rows = cats.map(c => {
+    const s = spent[c.id] || 0, l = +c.monthly_limit, pc = l ? Math.min(100, s / l * 100) : 0;
+    const cls = l && s > l ? 'bad' : (l && s > l * .85 ? 'warn' : '');
+    return `<div class="cat" data-c="${c.id}"><div class="row"><span>${esc(c.name)}</span>
+      <span class="mute">${fmt(s)}${l ? ' из ' + fmt(l) : ' · лимит не задан'}</span></div>
+      ${l ? `<div class="bar"><i class="${cls}" style="width:${pc}%"></i></div>
+      <div class="mute" style="margin-top:4px">${s > l ? 'Превышение ' + fmt(s - l) : 'Осталось ' + fmt(l - s)}</div>` : ''}</div>`;
+  }).join('');
+  return `<div class="card"><div class="mute">Расходы за месяц / общий лимит</div>
+    <div class="big">${fmt(totalSpent)}${total ? ` <span class="mute" style="font-size:16px">из ${fmt(total)}</span>` : ''}</div></div>
+    <div class="card">${rows || '<div class="empty">Категорий пока нет.<br>Добавьте первую кнопкой ниже.</div>'}</div>
+    <div class="mute" style="padding:0 4px">Нажмите на категорию, чтобы изменить название или лимит.</div>
+    <button class="ghost full" id="ac">+ Новая категория</button>`;
+}
+
+function renderMore() {
+  return `<h1>Ещё</h1>
+  <div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
+  <div class="card"><div class="mute">Семья «${esc(S.household.name)}»</div>
+    <div>${S.members.map(m => esc(m.name)).join(', ')}</div>
+    ${S.members.length < 2 ? `<p>Код приглашения для второго участника:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.invite_code)}</div>
+    <div class="mute">Пусть партнёр зарегистрируется в приложении и выберет «Меня пригласили».</div>` : ''}</div>
+  <button class="ghost full" id="lo">Выйти</button>`;
+}
+
+function bindTab() {
+  $('#app').querySelectorAll('.seg button[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; render(); });
+  $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; render(); });
+  $('#app').querySelectorAll('.pi[data-p]').forEach(el => el.onclick = () => openStockItem(el.dataset.p));
+  $('#app').querySelectorAll('.pi[data-s]').forEach(el => el.onclick = () => openStaple(el.dataset.s));
+  if ($('#shop')) $('#shop').onclick = openShop;
+  $('#app').querySelectorAll('.tx').forEach(el => el.onclick = () => openTx(el.dataset.id));
+  $('#app').querySelectorAll('.cat').forEach(el => el.onclick = () => editLimit(el.dataset.c));
+  if ($('#ac')) $('#ac').onclick = addCategory;
+  if ($('#lo')) $('#lo').onclick = () => { S.booted = false; sb.auth.signOut(); };
+}
+
+// ---------- добавление операции ----------
+function sheet(html) {
+  closeSheet();
+  const d = document.createElement('div');
+  d.className = 'sheet-bg'; d.id = 'sh';
+  d.innerHTML = `<div class="sheet">${html}</div>`;
+  d.onclick = e => { if (e.target === d) closeSheet(); };
+  document.body.appendChild(d);
+}
+const closeSheet = () => { const s = $('#sh'); if (s) s.remove(); };
+
+function openAdd() {
+  let kind = 'expense', shared = true;
+  const catOpts = k => S.cats.filter(c => c.kind === k).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')
+    + '<option value="">Без категории</option><option value="__new">+ Новая категория…</option>';
+  sheet(`<div class="seg" id="kd"><button data-k="expense" class="on">Расход</button><button data-k="income">Доход</button></div>
+    <input id="am" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Сумма, ₽" style="font-size:24px">
+    <select id="ct">${catOpts('expense')}</select>
+    <input id="nt" placeholder="Заметка (необязательно)">
+    <input id="dt" type="date" value="${today()}">
+    <div class="seg" id="sc"><button data-s="1" class="on">Общий</button><button data-s="0">Личный</button></div>
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>`);
+  $('#am').focus();
+  $('#ct').onchange = async () => {
+    if ($('#ct').value !== '__new') return;
+    const name = prompt(kind === 'expense' ? 'Название новой категории расходов' : 'Название новой категории доходов');
+    if (!name || !name.trim()) { $('#ct').innerHTML = catOpts(kind); return; }
+    const { data, error } = await sb.from('categories')
+      .insert({ household_id: S.household.id, name: name.trim(), kind }).select().single();
+    if (error) { alert(error.message); $('#ct').innerHTML = catOpts(kind); return; }
+    S.cats.push(data);
+    $('#ct').innerHTML = catOpts(kind);
+    $('#ct').value = data.id;
+  };
+  document.querySelectorAll('#kd button').forEach(b => b.onclick = () => {
+    kind = b.dataset.k;
+    document.querySelectorAll('#kd button').forEach(x => x.classList.toggle('on', x === b));
+    $('#ct').innerHTML = catOpts(kind);
+  });
+  document.querySelectorAll('#sc button').forEach(b => b.onclick = () => {
+    shared = b.dataset.s === '1';
+    document.querySelectorAll('#sc button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('#sv').onclick = async () => {
+    const amount = parseFloat($('#am').value.replace(',', '.'));
+    if (!(amount > 0)) return $('#err').textContent = 'Введите сумму';
+    $('#sv').disabled = true;
+    const { error } = await sb.from('transactions').insert({
+      household_id: S.household.id, kind, amount, category_id: $('#ct').value || null,
+      shared, note: $('#nt').value.trim() || null, date: $('#dt').value || today()
+    });
+    if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
+    closeSheet(); refresh();
+  };
+}
+
+function openTx(id) {
+  const t = S.tx.find(x => x.id === id); if (!t) return;
+  const cat = S.cats.find(c => c.id === t.category_id);
+  const own = t.user_id === S.user.id || (S.me && S.me.role === 'owner');
+  sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
+    <p>${esc(cat ? cat.name : 'Без категории')} · ${esc(t.date)}<br><span class="mute">${esc(nameOf(t.user_id))}${t.shared ? ' · общий' : ' · личный'}${t.note ? ' · ' + esc(t.note) : ''}</span></p>
+    ${own ? '<button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>' : '<div class="mute">Удалять может автор записи или создатель семьи.</div>'}
+    <button class="ghost full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  if ($('#dl')) $('#dl').onclick = async () => {
+    if (!confirm('Удалить операцию?')) return;
+    const { data, error } = await sb.from('transactions').delete().eq('id', id).select();
+    if (error) return alert(error.message);
+    if (!data || !data.length) return alert('Не удалось удалить: нет прав. Проверьте, что обновление базы выполнено.');
+    closeSheet(); refresh();
+  };
+}
+
+function editLimit(id) {
+  const c = S.cats.find(x => x.id === id); if (!c) return;
+  sheet(`<b>Категория</b>
+    <input id="cn" value="${esc(c.name)}" placeholder="Название">
+    <input id="cl" type="number" inputmode="decimal" min="0" step="1" value="${+c.monthly_limit || ''}" placeholder="Лимит на месяц, ₽ (пусто — без лимита)">
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>
+    <button class="ghost full" id="dl" style="color:var(--bad)">Удалить категорию</button>`);
+  $('#sv').onclick = async () => {
+    const name = $('#cn').value.trim();
+    if (!name) return $('#err').textContent = 'Введите название';
+    const lim = parseFloat(String($('#cl').value).replace(',', '.')) || 0;
+    if (lim < 0) return $('#err').textContent = 'Лимит не может быть отрицательным';
+    const { error } = await sb.from('categories').update({ name, monthly_limit: lim }).eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+  $('#dl').onclick = async () => {
+    if (!confirm(`Удалить категорию «${c.name}»? Операции останутся, но будут без категории.`)) return;
+    const { error } = await sb.from('categories').delete().eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+}
+
+function addCategory() {
+  sheet(`<b>Новая категория расходов</b>
+    <input id="cn" placeholder="Название (например, Продукты)">
+    <input id="cl" type="number" inputmode="decimal" min="0" step="1" placeholder="Лимит на месяц, ₽ (необязательно)">
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Добавить</button>`);
+  $('#cn').focus();
+  $('#sv').onclick = async () => {
+    const name = $('#cn').value.trim();
+    if (!name) return $('#err').textContent = 'Введите название';
+    const lim = parseFloat(String($('#cl').value).replace(',', '.')) || 0;
+    const { error } = await sb.from('categories')
+      .insert({ household_id: S.household.id, name, kind: 'expense', monthly_limit: lim });
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+}
+
+// ---------- Продукты ----------
+const UNITS = { 'шт': ['count', 1], 'г': ['mass', 1], 'кг': ['mass', 1000], 'мл': ['volume', 1], 'л': ['volume', 1000] };
+const KIND_UNITS = { count: ['шт'], mass: ['г', 'кг'], volume: ['мл', 'л'] };
+const PRICE_UNIT = { count: 'шт', mass: 'кг', volume: 'л' };
+const PRICE_DIV = { count: 1, mass: 1000, volume: 1000 };
+const nf = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+const norm = s => String(s || '').trim().toLowerCase().replace(/ё/g, 'е');
+const parseNum = v => parseFloat(String(v).replace(',', '.'));
+const prod = id => S.products.find(p => p.id === id);
+
+function fmtQty(n, kind) {
+  n = +n;
+  if (kind === 'count') return nf.format(n) + ' шт';
+  const big = n >= 1000;
+  return nf.format(big ? n / 1000 : n) + ' ' + (kind === 'mass' ? (big ? 'кг' : 'г') : (big ? 'л' : 'мл'));
+}
+
+// «300», «1.5 кг», «500 мл» -> число в базовых единицах (или null)
+function parseQty(str, kind) {
+  const m = String(str).trim().toLowerCase().match(/^([\d.,]+)\s*(шт|г|кг|мл|л|g|kg|ml|l)?$/);
+  if (!m) return null;
+  const alias = { g: 'г', kg: 'кг', ml: 'мл', l: 'л' };
+  const n = parseNum(m[1]);
+  if (!(n >= 0)) return null;
+  const u = alias[m[2]] || m[2] || KIND_UNITS[kind][0];
+  if (UNITS[u][0] !== kind) return null;
+  return n * UNITS[u][1];
+}
+
+const isFresh = b => !b.expires_on || b.expires_on >= today();
+const haveQty = pid => S.pantry.filter(b => b.product_id === pid && isFresh(b)).reduce((s, b) => s + +b.qty, 0);
+
+function shortages() {
+  return S.staples.map(st => {
+    const p = prod(st.product_id);
+    if (!p) return null;
+    const have = haveQty(p.id);
+    return { st, p, have, need: Math.max(0, +st.min_qty - have) };
+  }).filter(Boolean);
+}
+const missing = () => shortages().filter(x => x.need > 0);
+
+function expInfo(d) {
+  if (!d) return { text: '', cls: '' };
+  const days = Math.round((new Date(d + 'T00:00') - new Date(today() + 'T00:00')) / 86400000);
+  const dt = new Date(d + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  if (days < 0) return { text: 'просрочено (' + dt + ')', cls: 'bad' };
+  if (days <= 3) return { text: 'до ' + dt + (days === 0 ? ' (сегодня)' : ' (осталось дн.: ' + days + ')'), cls: 'warn' };
+  return { text: 'до ' + dt, cls: '' };
+}
+
+// ----- экран «Продукты» -----
+function renderFood() {
+  if (!S.foodReady) {
+    return '<div class="card"><b>Нужно обновить базу</b><p class="mute">Выполните файл update-2.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+  }
+  const seg = `<div class="seg">
+    <button data-sub="stock" class="${S.sub === 'stock' ? 'on' : ''}">Дома</button>
+    <button data-sub="staples" class="${S.sub === 'staples' ? 'on' : ''}">Всегда дома</button></div>`;
+  return seg + (S.sub === 'stock' ? renderStock() : renderStaples());
+}
+
+function renderStock() {
+  const groups = {};
+  S.pantry.forEach(b => (groups[b.product_id] = groups[b.product_id] || []).push(b));
+  const list = Object.keys(groups).map(pid => {
+    const items = groups[pid];
+    const dated = items.filter(b => b.expires_on).map(b => b.expires_on).sort();
+    return { p: prod(pid), items, total: items.reduce((s, b) => s + +b.qty, 0), exp: dated[0] || '' };
+  }).filter(g => g.p).sort((a, b) => (a.exp || '9999').localeCompare(b.exp || '9999') || a.p.name.localeCompare(b.p.name, 'ru'));
+  const rows = list.map(g => {
+    const e = expInfo(g.exp);
+    return `<div class="pi" data-p="${g.p.id}"><div><div>${esc(g.p.name)}</div>
+      <div class="mute ${e.cls ? 'txt-' + e.cls : ''}">${esc(e.text || 'срок не указан')}</div></div>
+      <div class="amt">${fmtQty(g.total, g.p.kind)}</div></div>`;
+  }).join('');
+  return `<div class="card">${rows || '<div class="empty">Дома пока ничего не записано.<br>Нажмите +, чтобы добавить вручную или отсканировать штрихкод.</div>'}</div>`;
+}
+
+function renderStaples() {
+  const list = shortages().sort((a, b) => (b.need > 0) - (a.need > 0) || a.p.name.localeCompare(b.p.name, 'ru'));
+  const miss = list.filter(x => x.need > 0).length;
+  const head = list.length ? `<div class="card"><div class="row" style="align-items:center">
+      <div><b>${miss ? 'Не хватает позиций: ' + miss : 'Всё есть дома'}</b><div class="mute">из ${list.length} запланированных</div></div>
+      <button id="shop"${miss ? '' : ' class="ghost"'}>Что докупить</button></div></div>` : '';
+  const rows = list.map(x => `<div class="pi" data-s="${x.st.id}"><div><div>${esc(x.p.name)}</div>
+      <div class="mute">нужно держать ${fmtQty(x.st.min_qty, x.p.kind)}, сейчас ${fmtQty(x.have, x.p.kind)}</div></div>
+      <div class="amt ${x.need > 0 ? 'txt-bad' : 'txt-good'}">${x.need > 0 ? 'не хватает ' + fmtQty(x.need, x.p.kind) : '✓'}</div></div>`).join('');
+  return head + `<div class="card">${rows || '<div class="empty">Список пуст.<br>Нажмите +, чтобы добавить продукт, который всегда должен быть дома.</div>'}</div>`;
+}
+
+// ----- сканер штрихкода -----
+let scanReader = null;
+function stopScan() {
+  try { if (scanReader) scanReader.reset(); } catch (e) {}
+  scanReader = null;
+  const o = $('#scan');
+  if (o) o.remove();
+}
+function loadZXing() {
+  return new Promise((res, rej) => {
+    if (window.ZXing) return res();
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+async function scanBarcode(done) {
+  stopScan();
+  const o = document.createElement('div');
+  o.id = 'scan'; o.className = 'sheet-bg'; o.style.zIndex = 20;
+  o.innerHTML = `<div class="sheet"><b>Наведите камеру на штрихкод</b>
+    <video id="vid" playsinline muted style="width:100%;border-radius:12px;background:#000;margin-top:8px;max-height:50vh"></video>
+    <div class="mute" id="smsg">Запускаю камеру…</div>
+    <button class="ghost full" id="scx">Отмена</button></div>`;
+  document.body.appendChild(o);
+  $('#scx').onclick = stopScan;
+  const say = t => { const m = $('#smsg'); if (m) m.textContent = t; };
+  try { await loadZXing(); } catch (e) { return say('Сканер не загрузился. Проверьте интернет и попробуйте ещё раз.'); }
+  try {
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128]);
+    scanReader = new ZXing.BrowserMultiFormatReader(hints, 300);
+    let got = false;
+    await scanReader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' } } }, 'vid', res => {
+      if (res && !got) { got = true; const code = res.getText(); stopScan(); done(code); }
+    });
+    say('Ищу штрихкод…');
+  } catch (e) {
+    say('Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера или введите название вручную.');
+  }
+}
+
+// Название по штрихкоду: открытая база Open Food Facts (может не знать часть товаров)
+async function lookupBarcode(code) {
+  try {
+    const ctl = new AbortController();
+    const tm = setTimeout(() => ctl.abort(), 6000);
+    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) +
+      '.json?fields=product_name,product_name_ru,brands,quantity', { signal: ctl.signal });
+    clearTimeout(tm);
+    const j = await r.json();
+    if (j.status !== 1 || !j.product) return null;
+    const p = j.product;
+    const base = (p.product_name_ru || p.product_name || '').trim();
+    const brand = (p.brands || '').split(',')[0].trim();
+    if (!base) return null;
+    let pack = null;
+    const m = String(p.quantity || '').toLowerCase().match(/^\s*([\d.,]+)\s*(kg|g|ml|l)\b/);
+    if (m) pack = { n: parseNum(m[1]), unit: { kg: 'кг', g: 'г', ml: 'мл', l: 'л' }[m[2]] };
+    return { name: brand && !norm(base).includes(norm(brand)) ? base + ' ' + brand : base, pack };
+  } catch (e) { return null; }
+}
+
+// ----- форма: название + штрихкод + количество (+ срок годности) -----
+function foodForm(o) {
+  let barcode = null;
+  sheet(`<b>${o.title}</b>
+    <div class="row" style="gap:8px"><input id="pn" list="pl" placeholder="Название продукта" autocomplete="off" style="flex:1"><button class="ghost" id="sc" style="margin:6px 0">Скан</button></div>
+    <datalist id="pl">${S.products.map(p => `<option value="${esc(p.name)}">`).join('')}</datalist>
+    <div class="mute" id="pinfo"></div>
+    <div class="row" style="gap:8px"><input id="pq" type="number" inputmode="decimal" min="0" step="any" placeholder="${o.qtyLabel}" style="flex:1">
+      <select id="pu" style="width:90px">${Object.keys(UNITS).map(u => `<option>${u}</option>`).join('')}</select></div>
+    ${o.expiry ? '<div class="mute">Срок годности (необязательно)</div><input id="pd" type="date">' : ''}
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>`);
+  const err = t => { $('#err').textContent = t; };
+  const syncUnit = () => {
+    const p = S.products.find(x => norm(x.name) === norm($('#pn').value));
+    const cur = $('#pu').value;
+    const opts = p ? KIND_UNITS[p.kind] : Object.keys(UNITS);
+    $('#pu').innerHTML = opts.map(u => `<option>${u}</option>`).join('');
+    if (opts.includes(cur)) $('#pu').value = cur;
+  };
+  $('#pn').oninput = syncUnit;
+  if (o.prefill) { $('#pn').value = o.prefill; syncUnit(); }
+  $('#sc').onclick = () => scanBarcode(async code => {
+    barcode = code;
+    const known = S.products.find(x => x.barcode === code);
+    if (known) { $('#pn').value = known.name; syncUnit(); $('#pinfo').textContent = 'Узнал по вашему списку'; return; }
+    $('#pinfo').textContent = 'Ищу название…';
+    const r = await lookupBarcode(code);
+    if (r) {
+      $('#pn').value = r.name; syncUnit();
+      $('#pinfo').textContent = 'Нашёл по штрихкоду, проверьте название';
+      if (r.pack && !$('#pq').value) { $('#pq').value = r.pack.n; $('#pu').value = r.pack.unit; }
+    } else {
+      $('#pinfo').textContent = 'Штрихкода ' + code + ' нет в базе. Введите название, в следующий раз узнаю сам.';
+    }
+  });
+  $('#sv').onclick = async () => {
+    const name = $('#pn').value.trim();
+    const q = parseNum($('#pq').value);
+    const unit = $('#pu').value;
+    if (!name) return err('Введите название');
+    if (!(q > 0)) return err('Введите количество');
+    const [kind, mult] = UNITS[unit];
+    let p = (barcode && S.products.find(x => x.barcode === barcode)) || S.products.find(x => norm(x.name) === norm(name));
+    if (p && p.kind !== kind) return err('Для «' + p.name + '» единицы: ' + KIND_UNITS[p.kind].join(' / '));
+    $('#sv').disabled = true;
+    if (!p) {
+      const { data, error } = await sb.from('products')
+        .insert({ household_id: S.household.id, name, kind, barcode }).select().single();
+      if (error) { $('#sv').disabled = false; return err(error.message); }
+      p = data; S.products.push(p);
+    } else if (barcode && !p.barcode) {
+      await sb.from('products').update({ barcode }).eq('id', p.id);
+    }
+    const e = await o.onSave(p, q * mult);
+    if (e) { $('#sv').disabled = false; return err(e); }
+    closeSheet(); refresh();
+  };
+}
+
+const openAddStock = prefill => foodForm({
+  title: 'Добавить продукт домой', qtyLabel: 'Сколько', expiry: true, prefill,
+  onSave: async (p, qty) => {
+    const { error } = await sb.from('pantry_items')
+      .insert({ household_id: S.household.id, product_id: p.id, qty, expires_on: $('#pd').value || null });
+    return error ? error.message : null;
+  }
+});
+
+const openAddStaple = () => foodForm({
+  title: 'Всегда должно быть дома', qtyLabel: 'Сколько держать минимум', expiry: false,
+  onSave: async (p, qty) => {
+    const { error } = await sb.from('staples')
+      .upsert({ household_id: S.household.id, product_id: p.id, min_qty: qty }, { onConflict: 'product_id' });
+    return error ? error.message : null;
+  }
+});
+
+// ----- карточка продукта дома: партии, «использовать», удалить -----
+function openStockItem(pid) {
+  const p = prod(pid);
+  if (!p) return;
+  const items = S.pantry.filter(b => b.product_id === pid)
+    .sort((a, b) => (a.expires_on || '9999').localeCompare(b.expires_on || '9999'));
+  sheet(`<b>${esc(p.name)}</b>${p.barcode ? ' <span class="mute">· ' + esc(p.barcode) + '</span>' : ''}
+    ${items.map(b => { const e = expInfo(b.expires_on); return `<div class="pi"><div><div>${fmtQty(b.qty, p.kind)}</div>
+      <div class="mute ${e.cls ? 'txt-' + e.cls : ''}">${esc(e.text || 'срок не указан')}</div></div>
+      <div><button class="ghost" data-use="${b.id}">Осталось…</button> <button class="link" data-del="${b.id}">Удалить</button></div></div>`; }).join('')}
+    <button class="ghost full" id="more">+ Добавить ещё</button>
+    <button class="link full" id="delp">Убрать продукт из списков</button>
+    <button class="ghost full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#more').onclick = () => openAddStock(p.name);
+  $('#delp').onclick = async () => {
+    if (!confirm('Удалить «' + p.name + '» полностью: остатки, запланированный минимум и цены?')) return;
+    const { error } = await sb.from('products').delete().eq('id', p.id);
+    if (error) return alert(error.message);
+    S.products = S.products.filter(x => x.id !== p.id);
+    closeSheet(); refresh();
+  };
+  document.querySelectorAll('#sh [data-use]').forEach(btn => btn.onclick = async () => {
+    const b = S.pantry.find(x => x.id === btn.dataset.use);
+    const v = prompt('Сколько осталось? Например: 300 г, 1.5 кг, 2 шт. Ноль — всё израсходовано.', '');
+    if (v === null) return;
+    const base = parseQty(v, p.kind);
+    if (base === null) return alert('Не понял количество. Пример: 300 г или 2 шт.');
+    const { error } = base === 0
+      ? await sb.from('pantry_items').delete().eq('id', b.id)
+      : await sb.from('pantry_items').update({ qty: base }).eq('id', b.id);
+    if (error) return alert(error.message);
+    closeSheet(); refresh();
+  });
+  document.querySelectorAll('#sh [data-del]').forEach(btn => btn.onclick = async () => {
+    if (!confirm('Удалить эту запись?')) return;
+    const { error } = await sb.from('pantry_items').delete().eq('id', btn.dataset.del);
+    if (error) return alert(error.message);
+    closeSheet(); refresh();
+  });
+}
+
+// ----- карточка запланированного продукта -----
+function openStaple(id) {
+  const st = S.staples.find(x => x.id === id);
+  const p = st && prod(st.product_id);
+  if (!p) return;
+  const big = p.kind !== 'count' && +st.min_qty >= 1000;
+  const unit = p.kind === 'count' ? 'шт' : p.kind === 'mass' ? (big ? 'кг' : 'г') : (big ? 'л' : 'мл');
+  const val = Math.round(+st.min_qty / UNITS[unit][1] * 1000) / 1000;
+  sheet(`<b>${esc(p.name)}</b><div class="mute">Сколько должно быть дома всегда</div>
+    <div class="row" style="gap:8px"><input id="pq" type="number" inputmode="decimal" min="0" step="any" value="${val}" style="flex:1">
+    <select id="pu" style="width:90px">${KIND_UNITS[p.kind].map(u => `<option${u === unit ? ' selected' : ''}>${u}</option>`).join('')}</select></div>
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>
+    <button class="link full" id="rm">Убрать из запланированных</button>
+    <button class="ghost full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#sv').onclick = async () => {
+    const q = parseNum($('#pq').value);
+    if (!(q > 0)) return $('#err').textContent = 'Введите количество';
+    const { error } = await sb.from('staples').update({ min_qty: q * UNITS[$('#pu').value][1] }).eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+  $('#rm').onclick = async () => {
+    const { error } = await sb.from('staples').delete().eq('id', id);
+    if (error) return alert(error.message);
+    closeSheet(); refresh();
+  };
+}
+
+// ----- «Что докупить»: нехватка, цены, итог по магазинам -----
+const priceOf = (pid, sid) => { const r = S.prices.find(x => x.product_id === pid && x.store_id === sid); return r ? +r.price : null; };
+const lineCost = (it, price) => price == null ? null : it.need / PRICE_DIV[it.p.kind] * price;
+function storeTotals(items, store, override) {
+  let total = 0, unknown = 0;
+  items.forEach(it => {
+    const price = override ? override[it.p.id] : priceOf(it.p.id, store.id);
+    const c = lineCost(it, price);
+    if (c == null) unknown++; else total += c;
+  });
+  return { total, unknown };
+}
+const shopText = items => 'Список покупок:\n' + items.map(it => '• ' + it.p.name + ' — ' + fmtQty(it.need, it.p.kind)).join('\n');
+function copyText(t) {
+  try { if (navigator.clipboard) return navigator.clipboard.writeText(t); } catch (e) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  } catch (e) {}
+}
+
+function openShop() {
+  const items = missing();
+  if (!items.length) {
+    sheet('<b>Всё есть дома</b><p class="mute">Докупать ничего не нужно: все запланированные продукты в наличии.</p><button class="ghost full" id="cl">Закрыть</button>');
+    $('#cl').onclick = closeSheet;
+    return;
+  }
+  const info = S.stores.map(st => ({ st, ...storeTotals(items, st) }));
+  const full = info.filter(x => x.unknown === 0);
+  const best = full.length > 1 ? Math.min(...full.map(x => x.total)) : null;
+  sheet(`<b>Что докупить</b>
+    <div class="card">${items.map(it => `<div class="row"><span>${esc(it.p.name)}</span><span class="mute">${fmtQty(it.need, it.p.kind)}</span></div>`).join('')}</div>
+    <div class="day">Магазины</div>
+    ${info.map(x => `<div class="card" data-st="${x.st.id}" style="cursor:pointer"><div class="row"><b>${esc(x.st.name)}</b><b>${x.total ? fmt(x.total) : '—'}</b></div>
+      <div class="mute">${x.unknown ? 'нет цены у позиций: ' + x.unknown : 'цены есть на всё'}${best !== null && x.unknown === 0 && x.total === best ? ' · дешевле всего' : ''}</div></div>`).join('')
+      || '<div class="mute" style="margin-bottom:8px">Магазинов пока нет. Добавьте первый, чтобы вводить цены и сравнивать.</div>'}
+    <button class="ghost full" id="addstore">+ Магазин</button>
+    <button class="ghost full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#addstore').onclick = () => editStore(null);
+  document.querySelectorAll('#sh [data-st]').forEach(el => el.onclick = () => openStore(el.dataset.st));
+}
+
+function openStore(sid) {
+  const st = S.stores.find(x => x.id === sid);
+  if (!st) return;
+  const items = missing();
+  const local = {};
+  items.forEach(it => { local[it.p.id] = priceOf(it.p.id, sid); });
+  sheet(`<div class="top" style="margin:0 0 6px"><button class="ghost" id="bk2">‹ Назад</button><b>${esc(st.name)}</b></div>
+    <div class="big" id="tot"></div><div class="mute" id="unk"></div>
+    <div class="card">${items.map(it => `<div class="pi"><div><div>${esc(it.p.name)}</div>
+      <div class="mute">${fmtQty(it.need, it.p.kind)} · цена за ${PRICE_UNIT[it.p.kind]}</div></div>
+      <div style="text-align:right"><input data-pid="${it.p.id}" type="number" inputmode="decimal" step="any" min="0" value="${local[it.p.id] ?? ''}" placeholder="₽" style="width:92px;margin:0;text-align:right">
+      <div class="mute" data-cost="${it.p.id}"></div></div></div>`).join('')}</div>
+    <button class="full" id="go">Перейти в магазин</button>
+    <div class="mute" id="msg" style="margin-top:6px">Список покупок скопируется, и откроется сайт магазина.</div>
+    <button class="ghost full" id="cp">Скопировать список</button>
+    <button class="link full" id="es">Изменить магазин</button>`);
+  const calc = () => {
+    const t = storeTotals(items, st, local);
+    $('#tot').textContent = fmt(t.total);
+    $('#unk').textContent = t.unknown ? 'Нет цены у позиций: ' + t.unknown + ' (итог без них)' : 'Цены указаны на все позиции';
+    items.forEach(it => {
+      const c = lineCost(it, local[it.p.id]);
+      const el = document.querySelector('#sh [data-cost="' + it.p.id + '"]');
+      if (el) el.textContent = c == null ? '' : '≈ ' + fmt(c);
+    });
+  };
+  calc();
+  $('#bk2').onclick = openShop;
+  $('#es').onclick = () => editStore(sid);
+  $('#cp').onclick = () => { copyText(shopText(items)); $('#msg').textContent = 'Список скопирован'; };
+  $('#go').onclick = () => {
+    copyText(shopText(items));
+    if (st.url) window.open(/^https?:\/\//i.test(st.url) ? st.url : 'https://' + st.url, '_blank', 'noopener');
+    else $('#msg').textContent = 'Список скопирован. Укажите адрес сайта в «Изменить магазин», чтобы переходить прямо отсюда.';
+  };
+  document.querySelectorAll('#sh input[data-pid]').forEach(inp => {
+    const pid = inp.dataset.pid;
+    inp.oninput = () => { const v = parseNum(inp.value); local[pid] = v >= 0 ? v : null; calc(); };
+    inp.onchange = async () => {
+      const v = parseNum(inp.value);
+      if (inp.value.trim() === '') {
+        const { error } = await sb.from('prices').delete().eq('product_id', pid).eq('store_id', sid);
+        if (!error) S.prices = S.prices.filter(r => !(r.product_id === pid && r.store_id === sid));
+      } else if (v >= 0) {
+        const { data, error } = await sb.from('prices').upsert(
+          { household_id: S.household.id, product_id: pid, store_id: sid, price: v, updated_at: new Date().toISOString() },
+          { onConflict: 'product_id,store_id' }).select();
+        if (error || !data || !data[0]) return alert(error ? error.message : 'Цена не сохранилась');
+        S.prices = S.prices.filter(r => !(r.product_id === pid && r.store_id === sid)).concat(data[0]);
+      }
+    };
+  });
+}
+
+function editStore(sid) {
+  const st = sid ? S.stores.find(x => x.id === sid) : null;
+  sheet(`<b>${st ? 'Магазин' : 'Новый магазин'}</b>
+    <input id="sn" placeholder="Название (например, Пятёрочка)" value="${esc(st ? st.name : '')}">
+    <input id="su" placeholder="Адрес сайта (необязательно)" value="${esc(st ? st.url || '' : '')}" autocapitalize="off">
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>
+    ${st ? '<button class="ghost full" id="dl" style="color:var(--bad)">Удалить магазин</button>' : ''}
+    <button class="ghost full" id="cl">Отмена</button>`);
+  $('#cl').onclick = openShop;
+  $('#sv').onclick = async () => {
+    const name = $('#sn').value.trim();
+    const url = $('#su').value.trim() || null;
+    if (!name) return $('#err').textContent = 'Введите название';
+    const { error } = st
+      ? await sb.from('stores').update({ name, url }).eq('id', sid)
+      : await sb.from('stores').insert({ household_id: S.household.id, name, url });
+    if (error) return $('#err').textContent = error.message;
+    await refresh();
+    openShop();
+  };
+  if (st) $('#dl').onclick = async () => {
+    if (!confirm('Удалить магазин «' + st.name + '» и его цены?')) return;
+    const { error } = await sb.from('stores').delete().eq('id', sid);
+    if (error) return alert(error.message);
+    await refresh();
+    openShop();
+  };
+}
+
+// ---------- запуск ----------
+(async function init() {
+  try { history.replaceState(null, ''); } catch (e) {}
+  if (SUPABASE_URL.startsWith('ВСТАВЬТЕ')) {
+    $('#app').innerHTML = '<div class="wrap"><div class="card"><b>Не настроено</b><p>Откройте index.html и вставьте SUPABASE_URL и SUPABASE_KEY.</p></div></div>';
+    return;
+  }
+  sb.auth.onAuthStateChange((ev, session) => {
+    if (ev === 'SIGNED_OUT') { S.user = null; S.me = null; renderAuth(); }
+    else if (session && (!S.user || S.user.id !== session.user.id)) { S.user = session.user; load(); }
+  });
+  const { data } = await sb.auth.getSession();
+  if (!data.session) renderAuth();
+})();
+</script>
+</body>
+</html>
