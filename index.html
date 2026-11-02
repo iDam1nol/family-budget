@@ -110,6 +110,11 @@ nav button.on{color:var(--brand)}
 .viewer .vb{padding:10px 16px calc(14px + env(safe-area-inset-bottom))}
 .viewer .vb .row{gap:10px;margin-top:6px}
 .viewer .vb button{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chips button{background:rgba(255,255,255,.07);border:1px solid var(--line);box-shadow:none;padding:10px 14px;border-radius:99px;font-weight:500}
+.chips button:active{background:var(--grad)}
+.chk{display:flex;align-items:center;gap:10px;margin:8px 0;color:var(--mute);font-size:14px}
+.chk input{width:20px;height:20px;margin:0;accent-color:#a78bfa;flex:none}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:60;background:#2a1a55;border:1px solid var(--line);color:var(--ink);padding:11px 18px;border-radius:99px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:rise .25s;max-width:90vw;text-align:center}
 .pi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .pi:last-child{border:0}
@@ -154,7 +159,8 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             products: [], pantry: [], staples: [], stores: [], prices: [], foodReady: false, sub: 'stock',
             token: null, inbox: [], autoReady: false, carry: 0, carryReady: false,
             goals: [], deposits: [], goalsReady: false, limSub: 'cats',
-            photos: [], photosReady: false, urls: {} };
+            photos: [], photosReady: false, urls: {},
+            rules: [], rulesReady: false, skipped: new Set() };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -181,7 +187,7 @@ async function load() {
 
 async function refresh() {
   const [from, to] = monthRange();
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -197,7 +203,8 @@ async function refresh() {
     sb.rpc('balance_before', { p_date: from }),
     sb.from('goals').select('*').order('created_at'),
     sb.from('goal_deposits').select('*').order('created_at', { ascending: false }),
-    sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600)
+    sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
+    sb.from('category_rules').select('*').order('keyword')
   ]);
   if (hh.data) S.household = hh.data;
   S.carryReady = !cr.error;
@@ -213,6 +220,8 @@ async function refresh() {
   S.goalsReady = !(gl.error || gd.error);
   S.goals = (S.goalsReady && gl.data) || [];
   S.deposits = (S.goalsReady && gd.data) || [];
+  S.rulesReady = !ru.error;
+  S.rules = (S.rulesReady && ru.data) || [];
   S.photosReady = !ph.error;
   S.photos = (S.photosReady && ph.data) || [];
   S.autoReady = !(tk.error || ib.error);
@@ -225,7 +234,7 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -405,6 +414,19 @@ function renderHome() {
 
 function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); refresh(); }
 
+function sortable() {
+  return S.tx.filter(t => !t.category_id && !S.skipped.has(t.id)
+    && (t.user_id === S.user.id || (S.me && S.me.role === 'owner'))
+    && S.cats.some(c => c.kind === t.kind));
+}
+function renderSortCard() {
+  const n = sortable().length;
+  if (!n) return '';
+  return `<div class="card"><b>Без категории: ${n}</b>
+    <div class="mute">Выберите категорию в один тап. Приложение запомнит магазин и дальше будет ставить её само.</div>
+    <button class="full" id="sort">Разобрать</button></div>`;
+}
+
 function renderTx() {
   const p = partner();
   const seg = [['all', 'Все'], ['shared', 'Общие'], ['mine', 'Мои'], ['other', p ? p.name : 'Партнёр']]
@@ -428,6 +450,7 @@ function renderTx() {
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
   <div><span class="mute">За месяц</span><b>${fmt(inc - exp)}</b></div></div>
+  ${renderSortCard()}
   <div class="card">${rows || '<div class="empty">Операций нет.<br>Нажмите + чтобы добавить.</div>'}</div>`;
 }
 
@@ -460,6 +483,9 @@ function renderMore() {
     ${S.members.length < 2 ? `<p>Код приглашения для второго участника:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.invite_code)}</div>
     <div class="mute">Пусть партнёр зарегистрируется в приложении и выберет «Меня пригласили».</div>` : ''}</div>
   ${renderAuto()}
+  <div class="card"><b>Автокатегории</b>
+    ${S.rulesReady ? `<div class="mute">Правил: ${S.rules.length}. Операции из банка получают категорию по слову из текста, например «пятёрочка» → Продукты.</div><button class="ghost full" id="rules">Правила</button>`
+      : '<p class="mute">Выполните файл update-8.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p>'}</div>
   <button class="ghost full" id="lo">Выйти</button>`;
 }
 
@@ -475,6 +501,8 @@ function bindTab() {
   if ($('#shop')) $('#shop').onclick = openShop;
   if ($('#inbox')) $('#inbox').onclick = openInbox;
   if ($('#plan')) $('#plan').onclick = openPlan;
+  if ($('#sort')) $('#sort').onclick = () => { S.skipped = new Set(); openSort(); };
+  if ($('#rules')) $('#rules').onclick = openRules;
   if ($('#tkon')) $('#tkon').onclick = () => openToken(true);
   if ($('#tkshow')) $('#tkshow').onclick = () => openToken(false);
   $('#app').querySelectorAll('.tx').forEach(el => el.onclick = () => openTx(el.dataset.id));
@@ -547,6 +575,9 @@ function openTx(id) {
   sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
     <p>${esc(cat ? cat.name : 'Без категории')} · ${esc(t.date)}<br><span class="mute">${esc(nameOf(t.user_id))}${t.shared ? ' · общий' : ' · личный'}${t.note ? ' · ' + esc(t.note) : ''}</span></p>
     ${own ? `<div class="mute">Категория</div><select id="ec">${S.cats.filter(c => c.kind === t.kind).map(c => `<option value="${c.id}"${c.id === t.category_id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}<option value=""${t.category_id ? '' : ' selected'}>Без категории</option></select><div class="mute" id="ecm"></div>` : ''}
+    ${own && t.note && S.rulesReady ? `<div class="mute" style="margin-top:8px">Запомнить для похожих операций: если в тексте есть</div>
+      <input id="rk" value="${esc(guessKeyword(t.note))}" placeholder="Например: пятёрочка">
+      <button class="ghost full" id="rkb">Запомнить правило</button><div class="mute" id="rkm"></div>` : ''}
     ${own ? '<button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>' : '<div class="mute">Удалять может автор записи или создатель семьи.</div>'}
     <button class="ghost full" id="cl">Закрыть</button>`);
   $('#cl').onclick = closeSheet;
@@ -556,6 +587,15 @@ function openTx(id) {
     if (!data || !data.length) return alert('Не удалось сохранить: нет прав. Проверьте, что обновление базы выполнено.');
     $('#ecm').textContent = 'Категория сохранена';
     refresh();
+  };
+  if ($('#rkb')) $('#rkb').onclick = async () => {
+    const cid = $('#ec').value;
+    if (!cid) return $('#rkm').textContent = 'Сначала выберите категорию выше';
+    try {
+      const n = await saveRule($('#rk').value, cid);
+      $('#rkm').textContent = `Правило сохранено. Категория назначена операциям: ${n}`;
+      refresh();
+    } catch (e) { $('#rkm').textContent = e.message; }
   };
   if ($('#dl')) $('#dl').onclick = async () => {
     if (!confirm('Удалить операцию?')) return;
@@ -1587,6 +1627,101 @@ async function openViewer(id) {
     big.onload = () => { if (viewerId === id && document.getElementById('vimg')) { img.src = full.url; img.style.filter = ''; img.removeAttribute('data-p'); } };
     big.src = full.url;
   }
+}
+
+
+// ---------- автокатегории ----------
+const NOT_MERCHANT = /^(покупк|оплат|перевод|пополнен|возврат|списан|снят|платеж|платёж|отправл|комисси|зачислен|поступлен|кэшбэк|кешбэк)/i;
+// предположение: название магазина или получателя = первый кусок текста без суммы и без глагола операции
+function guessKeyword(note) {
+  const parts = String(note || '').split(/\.\s+|\.$/).map(x => x.trim()).filter(Boolean);
+  const hit = parts.find(x => !/₽|руб/i.test(x) && !NOT_MERCHANT.test(x));
+  return (hit || '').toLowerCase().replace(/[.\s]+$/, '').slice(0, 40);
+}
+
+// сохранить правило и сразу применить к прошлым операциям без категории
+async function saveRule(keyword, catId) {
+  const kw = String(keyword || '').trim().toLowerCase();
+  if (kw.length < 2) throw new Error('Введите хотя бы 2 символа');
+  const cat = S.cats.find(c => c.id === catId);
+  if (!cat) throw new Error('Выберите категорию');
+  let r = await sb.from('category_rules').upsert({ household_id: S.household.id, keyword: kw, category_id: catId },
+    { onConflict: 'household_id,keyword' });
+  if (r.error) throw r.error;
+  r = await sb.from('transactions').update({ category_id: catId }).is('category_id', null).eq('kind', cat.kind)
+    .ilike('note', '%' + kw.replace(/[\\%_]/g, m => '\\' + m) + '%').select('id');
+  if (r.error) throw r.error;
+  return r.data ? r.data.length : 0;
+}
+
+// разбор операций без категории: один тап на операцию
+function openSort() {
+  const t = sortable()[0];
+  if (!t) {
+    sheet('<b>Готово</b><p class="mute">Все операции с категориями. Правила работают сами для новых уведомлений банка.</p><button class="full" id="cl">Закрыть</button>');
+    $('#cl').onclick = closeSheet;
+    burst(30);
+    return;
+  }
+  const cats = S.cats.filter(c => c.kind === t.kind);
+  const guess = guessKeyword(t.note);
+  sheet(`<div class="mute">Осталось разобрать: ${sortable().length}</div>
+    <div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
+    <div class="mute">${esc(t.date)} · ${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div>
+    <div class="chips">${cats.map(c => `<button data-c="${c.id}">${esc(c.name)}</button>`).join('')}</div>
+    ${S.rulesReady && guess ? `<label class="chk"><input type="checkbox" id="rm" checked><span>Запомнить для слова</span></label>
+      <input id="rk" value="${esc(guess)}" placeholder="Слово из текста">` : ''}
+    <div class="err" id="err"></div>
+    <button class="ghost full" id="sk">Пропустить</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#sk').onclick = () => { S.skipped.add(t.id); openSort(); };
+  document.querySelectorAll('#sh [data-c]').forEach(b => b.onclick = async () => {
+    const cid = b.dataset.c;
+    document.querySelectorAll('#sh [data-c]').forEach(x => x.disabled = true);
+    try {
+      if ($('#rm') && $('#rm').checked && String($('#rk').value).trim().length >= 2) await saveRule($('#rk').value, cid);
+      const { data, error } = await sb.from('transactions').update({ category_id: cid }).eq('id', t.id).select('id');
+      if (error) throw error;
+      if (!data || !data.length) throw new Error('Не удалось сохранить: нет прав');
+      t.category_id = cid;                      // сразу уходит из очереди
+      await refresh();
+      openSort();
+    } catch (e) {
+      document.querySelectorAll('#sh [data-c]').forEach(x => x.disabled = false);
+      $('#err').textContent = e.message;
+    }
+  });
+}
+
+// список правил: добавить, удалить
+function openRules() {
+  const catName = id => (S.cats.find(c => c.id === id) || {}).name || '—';
+  sheet(`<b>Автокатегории</b>
+    <p class="mute">Если в тексте операции есть слово, она получает категорию. Побеждает самое длинное совпавшее слово. Правила действуют на новые операции из банка.</p>
+    ${S.rules.length ? S.rules.map(r => `<div class="pi" data-r="${r.id}"><div><div>${esc(r.keyword)}</div><div class="mute">→ ${esc(catName(r.category_id))}</div></div><div class="mute">Удалить</div></div>`).join('')
+      : '<div class="empty">Правил пока нет.</div>'}
+    <div class="mute" style="margin-top:10px">Новое правило</div>
+    <input id="rk" placeholder="Слово из текста, например: пятёрочка">
+    <select id="rc">${S.cats.map(c => `<option value="${c.id}">${esc(c.name)} (${c.kind === 'income' ? 'доход' : 'расход'})</option>`).join('')}</select>
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Добавить правило</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  document.querySelectorAll('#sh [data-r]').forEach(el => el.onclick = async () => {
+    if (!confirm('Удалить правило?')) return;
+    const { error } = await sb.from('category_rules').delete().eq('id', el.dataset.r);
+    if (error) return $('#err').textContent = error.message;
+    await refresh(); openRules();
+  });
+  $('#sv').onclick = async () => {
+    try {
+      const n = await saveRule($('#rk').value, $('#rc').value);
+      await refresh();
+      openRules();
+      toast(n ? `Правило сохранено, категория назначена операциям: ${n}` : 'Правило сохранено');
+    } catch (e) { $('#err').textContent = e.message; }
+  };
 }
 
 // ---------- запуск ----------
