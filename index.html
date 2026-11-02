@@ -90,6 +90,27 @@ nav button.on{color:var(--brand)}
 .t2{background:linear-gradient(145deg,#d946ef,#701a75)}
 .t3{background:linear-gradient(145deg,#6366f1,#312e81)}
 .t4{background:linear-gradient(145deg,#ec4899,#6b21a8)}
+.t5{background:linear-gradient(135deg,#7c3aed,#c026d3 70%,#ec4899)}
+.tile.wide{grid-column:1/-1;aspect-ratio:auto;min-height:118px;flex-direction:row;align-items:flex-end}
+.tile.wide svg{align-self:flex-start;width:52px;height:52px}
+.tile.wide>div{text-align:right}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:6px}
+.ph{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;cursor:pointer;background:linear-gradient(110deg,rgba(255,255,255,.05) 30%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.05) 70%) 0 0/200% 100%;animation:ldg 1.6s linear infinite}
+@keyframes ldg{to{background-position:-200% 0}}
+.ph img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .4s}
+.ph img.in{opacity:1}
+.ph:active{transform:scale(.97)}
+.ph i{position:absolute;left:6px;bottom:6px;width:22px;height:22px;border-radius:50%;background:var(--grad);font:600 11px/22px "Golos Text",sans-serif;font-style:normal;text-align:center;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.day::first-letter{text-transform:uppercase}
+.viewer{position:fixed;inset:0;z-index:30;background:#090316;display:flex;flex-direction:column;animation:fade .2s}
+.viewer .vt{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 14px 6px;color:var(--mute)}
+.viewer .vt button{padding:8px 14px;background:rgba(255,255,255,.08);box-shadow:none}
+.viewer .vi{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;touch-action:pan-y}
+.viewer .vi img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+.viewer .vb{padding:10px 16px calc(14px + env(safe-area-inset-bottom))}
+.viewer .vb .row{gap:10px;margin-top:6px}
+.viewer .vb button{flex:1}
+.toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:60;background:#2a1a55;border:1px solid var(--line);color:var(--ink);padding:11px 18px;border-radius:99px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:rise .25s;max-width:90vw;text-align:center}
 .pi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .pi:last-child{border:0}
 .pi .amt{font-weight:600;text-align:right}
@@ -132,7 +153,8 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             filter: 'all', tab: 'home', booted: false,
             products: [], pantry: [], staples: [], stores: [], prices: [], foodReady: false, sub: 'stock',
             token: null, inbox: [], autoReady: false, carry: 0, carryReady: false,
-            goals: [], deposits: [], goalsReady: false, limSub: 'cats' };
+            goals: [], deposits: [], goalsReady: false, limSub: 'cats',
+            photos: [], photosReady: false, urls: {} };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -159,7 +181,7 @@ async function load() {
 
 async function refresh() {
   const [from, to] = monthRange();
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -174,7 +196,8 @@ async function refresh() {
     sb.from('households').select('*').limit(1).single(),
     sb.rpc('balance_before', { p_date: from }),
     sb.from('goals').select('*').order('created_at'),
-    sb.from('goal_deposits').select('*').order('created_at', { ascending: false })
+    sb.from('goal_deposits').select('*').order('created_at', { ascending: false }),
+    sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600)
   ]);
   if (hh.data) S.household = hh.data;
   S.carryReady = !cr.error;
@@ -190,6 +213,8 @@ async function refresh() {
   S.goalsReady = !(gl.error || gd.error);
   S.goals = (S.goalsReady && gl.data) || [];
   S.deposits = (S.goalsReady && gd.data) || [];
+  S.photosReady = !ph.error;
+  S.photos = (S.photosReady && ph.data) || [];
   S.autoReady = !(tk.error || ib.error);
   S.token = S.autoReady ? tk.data : null;
   S.inbox = S.autoReady ? ib.data : [];
@@ -200,7 +225,7 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -275,6 +300,7 @@ const ICONS = {
   tx: '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
   lim: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12V3"/><path d="M12 12l6.4 6.4"/></svg>',
   food: '<svg viewBox="0 0 24 24"><path d="M3 9h18l-2 11H5z"/><path d="M8 9l3-5M16 9l-3-5"/></svg>',
+  photos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 4.5"/></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.9.3 5 2.6 5 5.8"/></svg>'
 };
 
@@ -296,7 +322,7 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
-  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', more: 'Семья' };
+  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья' };
   let body = '';
   if (S.tab === 'home') body = renderHome();
   else {
@@ -304,13 +330,15 @@ function render() {
     if (S.tab === 'tx') body += monthBar() + renderTx();
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : renderLimits());
     else if (S.tab === 'food') body += renderFood();
+    else if (S.tab === 'photos') body += renderPhotos();
     else body += renderMore();
   }
   $('#app').innerHTML = `<div class="wrap">${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
-  if ($('#add')) $('#add').onclick = () => S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : openAdd();
+  if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if (S.tab === 'home') countUp();
+  if (S.tab === 'photos') hydratePhotos();
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
   bindTab();
 }
@@ -371,6 +399,7 @@ function renderHome() {
     <button class="tile t2" data-t="lim">${ICONS.lim}<div><b>Лимиты</b><span>Задано: ${limits}</span></div></button>
     <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? 'Докупить: ' + missing().length : 'нужно обновить базу'}</span></div></button>
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
+    <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
   </div>`;
 }
 
@@ -437,6 +466,7 @@ function renderMore() {
 function bindTab() {
   $('#app').querySelectorAll('.seg button[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; render(); });
   $('#app').querySelectorAll('.seg button[data-ls]').forEach(b => b.onclick = () => { S.limSub = b.dataset.ls; render(); });
+  $('#app').querySelectorAll('.ph[data-id]').forEach(el => el.onclick = () => openViewer(el.dataset.id));
   $('#app').querySelectorAll('.goal').forEach(el => el.onclick = () => openGoal(el.dataset.g));
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
   $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; render(); });
@@ -1366,6 +1396,197 @@ function openGoal(id) {
   };
   $('#dp').onclick = () => move(1);
   $('#wd').onclick = () => move(-1);
+}
+
+
+// ---------- общие фото ----------
+const PHOTO_BUCKET = 'family-photos';
+const bucket = () => sb.storage.from(PHOTO_BUCKET);
+
+function toast(msg, ms = 2600) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  if (ms) setTimeout(() => t.remove(), ms);
+  return t;
+}
+
+function renderPhotos() {
+  if (!S.photosReady) {
+    return '<div class="card"><b>Фото</b><p class="mute">Выполните файл update-7.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+  }
+  if (!S.photos.length) {
+    return '<div class="card"><div class="empty">Фотографий пока нет.<br>Нажмите + и выберите снимки из галереи.<br>Их увидит вся семья.</div></div>';
+  }
+  const groups = [];
+  S.photos.forEach(ph => {
+    const label = new Date(ph.created_at).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    let g = groups[groups.length - 1];
+    if (!g || g.label !== label) groups.push(g = { label, items: [] });
+    g.items.push(ph);
+  });
+  return groups.map(g => `<div class="day">${esc(g.label)}</div><div class="pgrid">${g.items.map(ph =>
+    `<div class="ph" data-id="${ph.id}"><img data-p="${esc(ph.thumb_path)}" alt=""><i>${esc((nameOf(ph.user_id)[0] || '').toUpperCase())}</i></div>`).join('')}</div>`).join('');
+}
+
+// подписанные ссылки на закрытые файлы: берём пачкой и держим в кэше
+function applyUrls() {
+  document.querySelectorAll('img[data-p]').forEach(im => {
+    const u = S.urls[im.dataset.p];
+    if (u && u.exp > Date.now() && im.getAttribute('src') !== u.url) {
+      im.onload = () => im.classList.add('in');
+      im.src = u.url;
+      if (im.complete) im.classList.add('in');
+    }
+  });
+}
+async function signUrls(paths) {
+  const need = [...new Set(paths)].filter(p => !(S.urls[p] && S.urls[p].exp > Date.now()));
+  for (let i = 0; i < need.length; i += 100) {
+    const { data, error } = await bucket().createSignedUrls(need.slice(i, i + 100), 3600);
+    if (error || !data) break;
+    data.forEach(d => { if (d.signedUrl) S.urls[d.path] = { url: d.signedUrl, exp: Date.now() + 3300000 }; });
+  }
+}
+async function hydratePhotos() {
+  if (!S.photosReady) return;
+  applyUrls();
+  const paths = [...document.querySelectorAll('img[data-p]')].map(i => i.dataset.p);
+  if (!paths.length) return;
+  await signUrls(paths);
+  applyUrls();
+}
+
+// сжатие: большая копия до 1920 px и миниатюра до 420 px (JPEG), поворот по EXIF учитывается
+async function toJpeg(file, max, q) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    src = await new Promise((res, rej) => {
+      const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('не удалось открыть изображение'));
+      im.src = URL.createObjectURL(file);
+    });
+  }
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const k = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(src, 0, 0, c.width, c.height);
+  if (src.close) src.close();
+  return new Promise((res, rej) => c.toBlob(b => b ? res({ blob: b, w: c.width, h: c.height }) : rej(new Error('не удалось сжать')), 'image/jpeg', q));
+}
+
+function pickPhotos() {
+  if (!S.photosReady) return toast('Сначала выполните update-7.sql в Supabase', 4000);
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.style.display = 'none';
+  inp.onchange = () => { const f = [...inp.files]; inp.remove(); if (f.length) uploadPhotos(f); };
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+async function uploadPhotos(files) {
+  let ok = 0, bad = 0, lastErr = '';
+  const t = toast('', 0);
+  for (let i = 0; i < files.length; i++) {
+    t.textContent = `Загружаем ${i + 1} из ${files.length}…`;
+    const id = crypto.randomUUID();
+    const path = `${S.household.id}/${id}.jpg`, tpath = `${S.household.id}/${id}_t.jpg`;
+    try {
+      const full = await toJpeg(files[i], 1920, .82), th = await toJpeg(files[i], 420, .75);
+      let r = await bucket().upload(path, full.blob, { contentType: 'image/jpeg' });
+      if (r.error) throw r.error;
+      r = await bucket().upload(tpath, th.blob, { contentType: 'image/jpeg' });
+      if (r.error) { await bucket().remove([path]); throw r.error; }
+      r = await sb.from('photos').insert({ id, household_id: S.household.id, user_id: S.user.id, path, thumb_path: tpath,
+        width: full.w, height: full.h, size: full.blob.size });
+      if (r.error) { await bucket().remove([path, tpath]); throw r.error; }
+      ok++;
+    } catch (e) { bad++; lastErr = (e && e.message) || String(e); }
+  }
+  t.remove();
+  await refresh();
+  if (ok) burst(ok > 1 ? 26 : 16);
+  toast(bad ? `Загружено ${ok}, не удалось ${bad}: ${lastErr}` : (ok === 1 ? 'Фото добавлено' : `Добавлено фото: ${ok}`), bad ? 5000 : 2600);
+}
+
+function closeViewer() { const v = document.getElementById('viewer'); if (v) v.remove(); document.removeEventListener('keydown', viewerKey); }
+function viewerKey(e) {
+  if (e.key === 'Escape') closeViewer();
+  else if (e.key === 'ArrowLeft') stepViewer(-1);
+  else if (e.key === 'ArrowRight') stepViewer(1);
+}
+let viewerId = null;
+function stepViewer(d) {
+  const i = S.photos.findIndex(x => x.id === viewerId) + d;
+  if (i >= 0 && i < S.photos.length) openViewer(S.photos[i].id);
+}
+
+async function openViewer(id) {
+  const i = S.photos.findIndex(x => x.id === id);
+  if (i < 0) return;
+  const ph = S.photos[i];
+  viewerId = id;
+  closeViewer();
+  const canDel = ph.user_id === S.user.id || (S.me && S.me.role === 'owner');
+  const v = document.createElement('div');
+  v.className = 'viewer'; v.id = 'viewer';
+  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>${i + 1} из ${S.photos.length}</span></div>
+    <div class="vi"><img id="vimg" data-p="${esc(ph.thumb_path)}" alt="" style="filter:blur(6px)"></div>
+    <div class="vb"><div class="mute">${esc(nameOf(ph.user_id))} · ${esc(new Date(ph.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
+      <input id="vc" value="${esc(ph.caption || '')}" placeholder="Подпись" maxlength="200">
+      <div class="row"><button class="ghost" id="vs">Сохранить на телефон</button>${canDel ? '<button class="ghost" id="vd" style="color:var(--bad)">Удалить</button>' : ''}</div></div>`;
+  document.body.appendChild(v);
+  document.addEventListener('keydown', viewerKey);
+  v.querySelector('#vx').onclick = closeViewer;
+  let x0 = null;
+  v.querySelector('.vi').ontouchstart = e => { x0 = e.touches[0].clientX; };
+  v.querySelector('.vi').ontouchend = e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) stepViewer(dx < 0 ? 1 : -1);
+  };
+  v.querySelector('#vc').onchange = async e => {
+    const caption = e.target.value.trim() || null;
+    const { error } = await sb.from('photos').update({ caption }).eq('id', id);
+    if (error) return toast(error.message, 4000);
+    ph.caption = caption;
+  };
+  const sign = async (path, opts) => {
+    const { data, error } = await bucket().createSignedUrl(path, 600, opts);
+    return error ? null : data.signedUrl;
+  };
+  v.querySelector('#vs').onclick = async () => {
+    const url = await sign(ph.path);
+    if (!url) return toast('Не удалось получить файл', 3000);
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    window.open(url, '_blank');
+  };
+  if (v.querySelector('#vd')) v.querySelector('#vd').onclick = async () => {
+    if (!confirm('Удалить это фото у всех в семье?')) return;
+    const { error } = await sb.from('photos').delete().eq('id', id);
+    if (error) return toast(error.message, 4000);
+    await bucket().remove([ph.path, ph.thumb_path]);
+    closeViewer(); refresh();
+  };
+  // сначала размытая миниатюра, затем полный снимок
+  await signUrls([ph.thumb_path, ph.path]);
+  if (viewerId !== id) return;
+  const img = v.querySelector('#vimg');
+  applyUrls();
+  const full = S.urls[ph.path];
+  if (img && full) {
+    const big = new Image();
+    big.onload = () => { if (viewerId === id && document.getElementById('vimg')) { img.src = full.url; img.style.filter = ''; img.removeAttribute('data-p'); } };
+    big.src = full.url;
+  }
 }
 
 // ---------- запуск ----------
