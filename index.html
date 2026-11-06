@@ -147,6 +147,36 @@ button.mcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-conten
 .colx span{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--mute)}
 .colx span.on{color:var(--ink);font-weight:600}
 .hbar{height:8px;margin-top:6px;border-radius:0 4px 4px 0;background:#a78bfa;min-width:2px}
+body{overflow-x:clip}
+button{position:relative;overflow:hidden;transition:transform .22s cubic-bezier(.34,1.56,.64,1),box-shadow .2s,background-color .2s}
+button:active{transform:scale(.94)}
+button.mcol{overflow:visible}
+.mcol:active i{opacity:.7}
+.tile{transition:transform .22s cubic-bezier(.34,1.56,.64,1)}
+.tile:active{transform:scale(.93)}
+.rip{position:absolute;border-radius:50%;background:rgba(255,255,255,.3);transform:scale(0);animation:rip .5s ease-out forwards;pointer-events:none}
+@keyframes rip{to{transform:scale(1);opacity:0}}
+.tx,.pi,.cat{transition:background-color .15s,transform .15s}
+.tx:active,.pi[data-p]:active,.pi[data-s]:active,.pi[data-ib]:active,.pi[data-r]:active,.recur:active,.cat[data-c]:active,.goal:active{background:rgba(167,139,250,.12);transform:scale(.985)}
+.enter-fwd{animation:pagefwd .26s cubic-bezier(.2,.8,.2,1)}
+.enter-back{animation:pageback .26s cubic-bezier(.2,.8,.2,1)}
+.enter-sub>*:not(.top):not(.monthbar):not(.seg){animation:pagesub .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes pagefwd{from{transform:translateX(22px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pageback{from{transform:translateX(-22px);opacity:0}to{transform:none;opacity:1}}
+@keyframes pagesub{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.enter-sub .seg button.on{animation:segpop .3s cubic-bezier(.34,1.56,.64,1)}
+@keyframes segpop{from{transform:scale(.88)}to{transform:none}}
+.enter-back .tile{animation:tilein .34s cubic-bezier(.34,1.56,.64,1) both}
+.enter-back .t2{animation-delay:.04s}.enter-back .t4{animation-delay:.08s}.enter-back .t3{animation-delay:.12s}.enter-back .t5{animation-delay:.16s}
+@keyframes tilein{from{transform:scale(.86);opacity:0}to{transform:none;opacity:1}}
+.enter-sub .mcol i{transform-origin:bottom;animation:growy .42s cubic-bezier(.2,.8,.2,1)}
+.enter-sub .hbar{transform-origin:left;animation:growx .42s cubic-bezier(.2,.8,.2,1)}
+@keyframes growy{from{transform:scaleY(0)}to{transform:none}}
+@keyframes growx{from{transform:scaleX(0)}to{transform:none}}
+.sheet-bg.out{animation:fadeout .18s forwards;pointer-events:none}
+.sheet-bg.out .sheet{animation:sink .18s ease-in forwards}
+@keyframes fadeout{to{opacity:0}}
+@keyframes sink{to{transform:translateY(40px)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -422,15 +452,17 @@ const ICONS = {
 function go(tab) {
   if (tab === 'home') {
     if (history.state && history.state.t) history.back();
-    else { S.tab = 'home'; render(); }
+    else { S.tab = 'home'; S._enter = 'back'; render(); }
     return;
   }
   S.tab = tab;
+  S._enter = 'fwd';
   history.pushState({ t: tab }, '');
   render();
 }
 window.addEventListener('popstate', e => {
   S.tab = (e.state && e.state.t) || 'home';
+  S._enter = 'back';
   if (S.me) render();
 });
 
@@ -448,7 +480,10 @@ function render() {
     else if (S.tab === 'photos') body += renderPhotos();
     else body += renderMore();
   }
-  $('#app').innerHTML = `<div class="wrap">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
+  // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
+  const enter = S._enter ? ' enter-' + S._enter : '';
+  S._enter = null;
+  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
@@ -468,6 +503,7 @@ const calm = () => typeof requestAnimationFrame === 'function' && !(window.match
 
 // конфетти из фиолетово-розовых частиц (выше всего при пополнении цели)
 function burst(n = 34) {
+  sound('success');
   if (!calm()) return;
   const box = document.createElement('div');
   box.className = 'confetti';
@@ -520,7 +556,7 @@ function renderHome() {
   </div>`;
 }
 
-function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); refresh(); }
+function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); S._enter = 'sub'; refresh(); }
 
 function sortable() {
   return S.tx.filter(t => !t.category_id && !S.skipped.has(t.id)
@@ -598,21 +634,24 @@ function renderMore() {
     <div class="mute">Сохраните файл на телефон или в облако. Секретный токен автоимпорта в файлы не попадает, сами фотографии тоже.</div>
     <button class="ghost full" id="excsv">Операции для Excel (CSV)</button>
     <button class="ghost full" id="exjson">Все данные (JSON)</button></div>
+  <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
+    <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
   <button class="ghost full" id="lo">Выйти</button>`;
 }
 
 function bindTab() {
-  $('#app').querySelectorAll('.seg button[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; render(); });
-  $('#app').querySelectorAll('.seg button[data-ls]').forEach(b => b.onclick = () => { S.limSub = b.dataset.ls; render(); });
+  $('#app').querySelectorAll('.seg button[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; S._enter = 'sub'; render(); });
+  $('#app').querySelectorAll('.seg button[data-ls]').forEach(b => b.onclick = () => { S.limSub = b.dataset.ls; S._enter = 'sub'; render(); });
+  if ($('#snd')) $('#snd').onchange = e => { lsSet('fb_sound', e.target.checked); if (e.target.checked) sound('success'); };
   $('#app').querySelectorAll('.ph[data-id]').forEach(el => el.onclick = () => openViewer(el.dataset.id));
   $('#app').querySelectorAll('.goal').forEach(el => el.onclick = () => openGoal(el.dataset.g));
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
   $('#app').querySelectorAll('.recur').forEach(el => el.onclick = () => openRecur(el.dataset.r));
   if ($('#arc')) $('#arc').onclick = () => openRecurForm(null);
-  $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); refresh(); });
+  $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); S._enter = 'sub'; refresh(); });
   if ($('#excsv')) $('#excsv').onclick = exportCsv;
   if ($('#exjson')) $('#exjson').onclick = exportJson;
-  $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; render(); });
+  $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; S._enter = 'sub'; render(); });
   $('#app').querySelectorAll('.pi[data-p]').forEach(el => el.onclick = () => openStockItem(el.dataset.p));
   $('#app').querySelectorAll('.pi[data-s]').forEach(el => el.onclick = () => openStaple(el.dataset.s));
   if ($('#shop')) $('#shop').onclick = openShop;
@@ -630,14 +669,23 @@ function bindTab() {
 
 // ---------- добавление операции ----------
 function sheet(html) {
-  closeSheet();
+  document.querySelectorAll('.sheet-bg.out').forEach(x => x.remove());   // id закрывающегося окна не должны мешать новому
+  const old = $('#sh');
+  if (old) old.remove(); else sound('open');
   const d = document.createElement('div');
   d.className = 'sheet-bg'; d.id = 'sh';
   d.innerHTML = `<div class="sheet">${html}</div>`;
   d.onclick = e => { if (e.target === d) closeSheet(); };
   document.body.appendChild(d);
 }
-const closeSheet = () => { const s = $('#sh'); if (s) s.remove(); };
+const closeSheet = () => {
+  const s = $('#sh');
+  if (!s) return;
+  sound('close');
+  if (!calm()) return s.remove();
+  s.id = ''; s.classList.add('out');
+  setTimeout(() => s.remove(), 180);
+};
 
 function openAdd() {
   let kind = 'expense', shared = true;
@@ -2019,6 +2067,7 @@ async function hydrateCharts() {
     const rows = await fetchAll(() => sb.from('transactions').select('id,amount,category_id,date')
       .eq('kind', 'expense').gte('date', from).lt('date', to).order('id'));
     if (S.histKey !== key) return;
+    if (S.histFor !== at) S._enter = 'sub';
     S.hist = rows; S.histFor = at; S.histErr = false;
   } catch (e) {
     if (S.histKey !== key) return;
@@ -2130,6 +2179,72 @@ async function exportJson() {
   } catch (e) { toast('Не удалось выгрузить: ' + (e.message || e), 5000); }
   t.remove();
 }
+
+
+// ---------- звук и отклик на нажатия ----------
+// Звуки синтезируются на лету: без файлов и внешних серверов. Настройка своя на каждом телефоне.
+const soundOn = () => lsGet('fb_sound') !== false;
+let audio = null;
+function tone(from, to, dur, gain, type = 'sine', delay = 0) {
+  const t0 = audio.currentTime + delay;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(from, t0);
+  o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(audio.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+const SOUNDS = {
+  tap: () => tone(620, 420, 0.05, 0.05, 'triangle'),
+  tab: () => tone(520, 780, 0.07, 0.06),
+  nav: () => tone(440, 660, 0.09, 0.06),
+  add: () => tone(300, 700, 0.11, 0.08),
+  danger: () => tone(300, 180, 0.12, 0.06, 'triangle'),
+  open: () => tone(280, 520, 0.13, 0.03),
+  close: () => tone(520, 280, 0.11, 0.03),
+  success: () => [523, 659, 784].forEach((f, i) => tone(f, f, 0.16, 0.06, 'sine', i * 0.07))
+};
+function sound(name) {
+  if (!soundOn()) return;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    audio = audio || new Ctx();
+    if (audio.state !== 'running') audio.resume();
+    SOUNDS[name]();
+  } catch (e) {}
+}
+
+const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st]';
+function soundFor(el) {
+  if (el.matches('.seg button,.monthbar button,.mcol')) return 'tab';
+  if (el.matches('.tile,#bk')) return 'nav';
+  if (el.matches('.fab')) return 'add';
+  if (el.matches('#dl,#vd')) return 'danger';
+  return 'tap';
+}
+function ripple(btn, e) {
+  if (!calm() || btn.matches('.mcol')) return;
+  const b = btn.getBoundingClientRect(), size = Math.max(b.width, b.height) * 2;
+  const x = e.clientX ? e.clientX - b.left : b.width / 2, y = e.clientY ? e.clientY - b.top : b.height / 2;
+  const r = document.createElement('span');
+  r.className = 'rip';
+  r.style.cssText = `width:${size}px;height:${size}px;left:${x - size / 2}px;top:${y - size / 2}px`;
+  btn.appendChild(r);
+  setTimeout(() => r.remove(), 550);
+}
+// только click: при прокрутке списка пальцем нажатие не срабатывает
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (!t || !t.closest) return;
+  const btn = t.closest('button');
+  if (btn) { sound(soundFor(btn)); ripple(btn, e); }
+  else if (t.closest(TAP_ROWS)) sound('tap');
+}, true);
+document.addEventListener('touchstart', () => {}, { passive: true });   // без этого iPhone не показывает нажатое состояние
 
 
 // ---------- запуск ----------
