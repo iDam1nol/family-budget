@@ -177,10 +177,59 @@ button.mcol{overflow:visible}
 .sheet-bg.out .sheet{animation:sink .18s ease-in forwards}
 @keyframes fadeout{to{opacity:0}}
 @keyframes sink{to{transform:translateY(40px)}}
+#bg{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
+#bg svg{display:block;width:100%;height:100%}
+#bg i{position:absolute;top:-16px;width:10px;height:10px;border-radius:80% 0 80% 0;background:#f7b8e0;opacity:.8;animation:petal 18s linear infinite}
+@keyframes petal{to{transform:translate3d(70px,110vh,0) rotate(540deg)}}
+button.ghost,.seg button:not(.on),.top button,.monthbar button{background:rgba(38,20,78,.9)}
+.sheet button.ghost,.sheet .seg button:not(.on){background:rgba(255,255,255,.07)}
+h1.hello{margin-top:66px}
+h1,.top b,.monthbar b,.day{text-shadow:0 1px 8px rgba(8,2,24,.9)}
+.tile{justify-content:flex-end;background:#2a1257}
+.tile::before{content:"";position:absolute;left:0;right:0;bottom:0;height:62%;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(16,6,42,0),rgba(16,6,42,.82))}
+.tile::after{display:none}
+.tile>div{position:relative;z-index:2;text-shadow:0 1px 6px rgba(8,2,24,.8)}
+.tile svg.art,.tile.wide svg.art{position:absolute;inset:0;width:100%;height:100%;stroke:none;filter:none;animation:none}
+.tile.wide>div{margin-left:auto}
+.art .spin{transform-box:fill-box;transform-origin:center;animation:artspin 26s linear infinite}
+.art .steam{animation:artsteam 3.2s ease-in-out infinite}
+.art .steam.b{animation-delay:-1.6s}
+.art .blink{animation:twinkle 2.6s ease-in-out infinite alternate}
+@keyframes artspin{to{transform:rotate(360deg)}}
+@keyframes artsteam{0%{transform:translateY(5px);opacity:0}50%{opacity:.85}100%{transform:translateY(-9px);opacity:0}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div id="bg" aria-hidden="true">
+<svg viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bgSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10082a"/><stop offset=".42" stop-color="#26105a"/><stop offset=".72" stop-color="#4c1f8c"/><stop offset="1" stop-color="#8f3f9f"/></linearGradient>
+    <radialGradient id="bgGlow"><stop offset="0" stop-color="#e9c8ff" stop-opacity=".55"/><stop offset=".45" stop-color="#b57bff" stop-opacity=".2"/><stop offset="1" stop-color="#b57bff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="bgMoon" cx=".38" cy=".35"><stop offset="0" stop-color="#fff"/><stop offset=".7" stop-color="#f3e4ff"/><stop offset="1" stop-color="#cdb0f5"/></radialGradient>
+    <linearGradient id="bgCloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b98be8"/><stop offset=".5" stop-color="#6d39b0"/><stop offset="1" stop-color="#3a1a78"/></linearGradient>
+    <path id="bgStar" d="M0-7Q0 0 7 0Q0 0 0 7Q0 0-7 0Q0 0 0-7Z"/>
+  </defs>
+  <rect width="390" height="844" fill="url(#bgSky)"/>
+  <circle cx="330" cy="44" r="150" fill="url(#bgGlow)"/>
+  <g opacity=".82" transform="translate(330 44) scale(.72) translate(-312 -84)">
+    <circle cx="312" cy="84" r="50" fill="url(#bgMoon)"/>
+    <g fill="#d9c2f7" opacity=".55"><circle cx="296" cy="72" r="8"/><circle cx="328" cy="98" r="11"/><circle cx="322" cy="62" r="4"/><circle cx="292" cy="104" r="4"/></g>
+  </g>
+  <g fill="#fff"><use href="#bgStar" x="60" y="150"/><use href="#bgStar" x="190" y="60" opacity=".8"/><use href="#bgStar" x="350" y="240" opacity=".8"/><use href="#bgStar" x="36" y="330" opacity=".7"/><use href="#bgStar" x="240" y="380" opacity=".6"/><use href="#bgStar" x="120" y="250" opacity=".6"/><use href="#bgStar" x="330" y="440" opacity=".5"/></g>
+  <g fill="url(#bgCloud)" opacity=".85"><circle cx="40" cy="560" r="46"/><circle cx="100" cy="540" r="58"/><circle cx="170" cy="566" r="42"/><circle cx="330" cy="520" r="52"/><circle cx="385" cy="540" r="44"/><circle cx="270" cy="548" r="34"/><rect x="-10" y="560" width="410" height="90"/></g>
+  <path fill="#32146c" d="M0 660 60 610l50 34 70-58 76 62 44-30 90 50V844H0Z"/>
+  <path fill="#1c0b45" d="M0 700h46v-26l34-20 32 20v26h30v-44h52v30l40-28 40 28v-20h52v-34l34-16 30 16v290H0Z"/>
+  <g fill="#ffd98a"><rect x="62" y="684" width="8" height="10"/><rect x="88" y="684" width="8" height="10"/><rect x="156" y="672" width="7" height="10"/><rect x="176" y="690" width="7" height="10"/><rect x="232" y="692" width="8" height="10"/><rect x="304" y="668" width="7" height="10"/><rect x="330" y="668" width="7" height="10"/><rect x="330" y="690" width="7" height="10" opacity=".6"/><rect x="62" y="712" width="8" height="10" opacity=".6"/><rect x="200" y="716" width="8" height="10" opacity=".7"/></g>
+  <g fill="none" stroke="#0a0420" stroke-width="2"><path d="M300 520v324" stroke-width="7"/><path d="M272 548h56M278 566h44" stroke-width="4"/><path d="M272 548C180 600 90 610-10 590M328 548c20 8 40 12 72 12M278 566C190 630 90 640-10 626"/></g>
+  <g transform="translate(-8 -16) scale(.68)">
+  <g fill="none" stroke="#6a3a9e" stroke-linecap="round"><path d="M-6 26C40 44 86 40 138 66" stroke-width="7"/><path d="M50 40c12 22 26 34 48 42M92 48c16-10 30-14 48-14" stroke-width="3.5"/></g>
+  <g fill="#f4a9dc"><circle cx="44" cy="30" r="9"/><circle cx="72" cy="50" r="8"/><circle cx="104" cy="48" r="9"/><circle cx="140" cy="66" r="9"/><circle cx="98" cy="84" r="8"/><circle cx="140" cy="34" r="8"/><circle cx="20" cy="42" r="7"/></g>
+  <g fill="#ffdcf1"><circle cx="44" cy="30" r="3.5"/><circle cx="72" cy="50" r="3"/><circle cx="104" cy="48" r="3.5"/><circle cx="140" cy="66" r="3.5"/><circle cx="98" cy="84" r="3"/><circle cx="140" cy="34" r="3"/><circle cx="20" cy="42" r="2.5"/></g>
+  </g>
+</svg>
+<i style="left:6%;animation-duration:15s;animation-delay:-2s"></i><i style="left:22%;animation-duration:19s;animation-delay:-9s"></i><i style="left:38%;animation-duration:17s;animation-delay:-5s"></i><i style="left:55%;animation-duration:21s;animation-delay:-13s"></i><i style="left:70%;animation-duration:16s;animation-delay:-7s"></i><i style="left:86%;animation-duration:20s;animation-delay:-16s"></i>
+</div>
 <div id="app"></div>
 <script src="supabase.js"></script>
 <script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>')</script>
@@ -442,11 +491,69 @@ function visibleTx() {
 }
 
 const ICONS = {
-  tx: '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.5L14 21l-2-1.5L10 21l-2-1.5L6 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-  lim: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12V3"/><path d="M12 12l6.4 6.4"/></svg>',
-  food: '<svg viewBox="0 0 24 24"><path d="M3 9h18l-2 11H5z"/><path d="M8 9l3-5M16 9l-3-5"/></svg>',
-  photos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 4.5"/></svg>',
-  more: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.9.3 5 2.6 5 5.8"/></svg>'
+  // ночной стол: окно с луной, раскрытая тетрадь, монеты, кружка
+  tx: `<svg class="art" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artTx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a23a6"/><stop offset="1" stop-color="#23104f"/></linearGradient></defs>
+    <rect width="200" height="200" fill="url(#artTx)"/>
+    <rect x="98" y="14" width="86" height="94" rx="6" fill="#170a40" stroke="#c9a6ff" stroke-width="3"/>
+    <circle cx="150" cy="46" r="17" fill="#fff0fb"/><circle cx="157" cy="41" r="14" fill="#170a40"/>
+    <g fill="#fff"><circle class="blink" cx="116" cy="34" r="1.8"/><circle cx="170" cy="82" r="1.5"/><circle class="blink" cx="118" cy="84" r="1.3"/></g>
+    <path d="M141 14v94M98 62h86" stroke="#c9a6ff" stroke-width="2.5"/>
+    <rect y="112" width="200" height="88" fill="#1b0b40"/><rect y="110" width="200" height="4" fill="#7c4bd4"/>
+    <path d="M14 106 54 94l40 12-40 8Z" fill="#f7efff"/><path d="M54 94v20" stroke="#b79cff" stroke-width="1.5"/>
+    <path d="M26 102l22-6M28 106l20-5M60 96l22 6M60 101l20 5" stroke="#8b6ccf" stroke-width="1.4"/>
+    <path d="M84 84 66 100l-3 5 5-2 18-17Z" fill="#ffc46b"/>
+    <g fill="#ffd76e" stroke="#c98a1e" stroke-width="1"><ellipse cx="160" cy="108" rx="13" ry="4.5"/><ellipse cx="160" cy="102" rx="13" ry="4.5"/><ellipse cx="160" cy="96" rx="13" ry="4.5"/></g>
+    <path d="M110 92h20v14a5 5 0 0 1-5 5h-10a5 5 0 0 1-5-5Z" fill="#e9a8df"/><path d="M130 96c7 0 7 9 0 9" fill="none" stroke="#e9a8df" stroke-width="3"/>
+    <path class="steam" d="M116 86c-3-4 3-6 0-11" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+  // магический круг: лимиты как заклинание, которое держит бюджет
+  lim: `<svg class="art" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><radialGradient id="artLim" cy=".36"><stop offset="0" stop-color="#d54fe0"/><stop offset=".55" stop-color="#6c1f9e"/><stop offset="1" stop-color="#2a0f58"/></radialGradient>
+    <linearGradient id="artGem" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e58cff"/></linearGradient></defs>
+    <rect width="200" height="200" fill="url(#artLim)"/>
+    <g transform="translate(14 -6) scale(.86)"><g class="spin" fill="none" stroke="#f6d8ff"><circle cx="100" cy="74" r="62" stroke-width="2.5"/><circle cx="100" cy="74" r="53" stroke-width="1" stroke-dasharray="3 7"/><path d="M100 22 145 100H55ZM100 126 55 48h90Z" stroke-width="2"/></g>
+    <circle cx="100" cy="74" r="28" fill="none" stroke="#fff" stroke-width="1.5"/>
+    <path d="M100 50 116 74 100 98 84 74Z" fill="url(#artGem)"/><path d="M84 74h32M100 50v48" stroke="#b44bd8" stroke-width="1"/></g>
+    <g fill="#fff"><circle class="blink" cx="30" cy="30" r="2"/><circle class="blink" cx="174" cy="24" r="2.4"/><circle cx="178" cy="124" r="1.6"/><circle cx="22" cy="118" r="1.6"/></g>
+  </svg>`,
+  // миска рамэна с паром и онигири
+  food: `<svg class="art" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artFd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b52bb0"/><stop offset="1" stop-color="#3f1279"/></linearGradient></defs>
+    <rect width="200" height="200" fill="url(#artFd)"/>
+    <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path class="steam" d="M72 42c-6-8 6-12 0-21"/><path class="steam b" d="M100 38c-6-8 6-12 0-21"/><path class="steam" d="M128 42c-6-8 6-12 0-21"/></g>
+    <path d="M132 22 92 66M148 28 104 68" stroke="#ffd6a0" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="100" cy="70" rx="66" ry="17" fill="#ffd98f"/>
+    <path d="M52 68c10-7 18 6 28 0s18 6 28 0 18 6 28 0" fill="none" stroke="#fff4c9" stroke-width="3.5"/>
+    <ellipse cx="74" cy="72" rx="12" ry="7" fill="#fff"/><ellipse cx="74" cy="72" rx="5.5" ry="4" fill="#ffb02e"/>
+    <circle cx="118" cy="74" r="9" fill="#fff"/><path d="M118 70c4 0 5 5 1 6-3 .6-4-3-1.500-3.500" fill="none" stroke="#f062b5" stroke-width="1.800"/>
+    <path d="M34 70h132c0 30-22 50-44 52H78c-22-2-44-22-44-52Z" fill="#fff0fb"/><path d="M38 86c30 12 94 12 124 0" fill="none" stroke="#b84ce0" stroke-width="5"/>
+    <g transform="translate(6 -46)"><path d="M172 104 188 132h-32Z" fill="#fff"/><rect x="164" y="122" width="16" height="12" fill="#1b0b40"/></g>
+  </svg>`,
+  // кадры на верёвочке и ветка сакуры
+  photos: `<svg class="art" viewBox="0 0 400 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artPh" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a22c0"/><stop offset=".6" stop-color="#c02f9f"/><stop offset="1" stop-color="#4a1a8c"/></linearGradient></defs>
+    <rect width="400" height="130" fill="url(#artPh)"/>
+    <path d="M0 12C70 34 160 34 250 12" fill="none" stroke="#f7e6ff" stroke-width="1.800"/>
+    <g transform="rotate(-6 50 56)"><rect x="24" y="24" width="56" height="66" rx="2" fill="#fff"/><rect x="29" y="29" width="46" height="44" fill="#2a1466"/><circle cx="62" cy="42" r="8" fill="#fff0fb"/><path d="M29 73l15-18 12 12 8-7 11 13Z" fill="#6d39b0"/></g>
+    <g transform="rotate(4 128 58)"><rect x="100" y="26" width="56" height="66" rx="2" fill="#fff"/><rect x="105" y="31" width="46" height="44" fill="#f4a9dc"/><path d="M128 75V52" stroke="#5b1f6f" stroke-width="4"/><circle cx="128" cy="46" r="15" fill="#e85cb5"/><circle cx="118" cy="52" r="9" fill="#ff8fd0"/><circle cx="139" cy="52" r="9" fill="#ff8fd0"/></g>
+    <g transform="rotate(-3 204 56)"><rect x="176" y="22" width="56" height="66" rx="2" fill="#fff"/><rect x="181" y="27" width="46" height="44" fill="#3b1a86"/><circle cx="196" cy="48" r="5" fill="#ffe3f4"/><path d="M188 71c0-12 16-12 16 0Z" fill="#ffe3f4"/><circle cx="214" cy="52" r="4" fill="#ffe3f4"/><path d="M207 71c0-10 14-10 14 0Z" fill="#ffe3f4"/></g>
+    <g fill="#ffd76e"><rect x="48" y="16" width="5" height="12" rx="1"/><rect x="124" y="18" width="5" height="12" rx="1"/><rect x="202" y="14" width="5" height="12" rx="1"/></g>
+    <path d="M404 6C366 16 340 14 304 38M360 12c-8 10-12 18-14 30" fill="none" stroke="#2a0d4f" stroke-width="4" stroke-linecap="round"/>
+    <g fill="#ffc2e6"><circle cx="384" cy="16" r="8"/><circle cx="352" cy="20" r="8"/><circle cx="328" cy="24" r="8"/><circle cx="304" cy="38" r="8"/><circle cx="346" cy="44" r="7"/></g>
+    <g fill="#fff"><circle cx="384" cy="16" r="2.800"/><circle cx="352" cy="20" r="2.800"/><circle cx="328" cy="24" r="2.800"/><circle cx="304" cy="38" r="2.800"/><circle cx="346" cy="44" r="2.500"/></g>
+  </svg>`,
+  // двое на холме под луной, рядом кот
+  more: `<svg class="art" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artFm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2a9e"/><stop offset=".6" stop-color="#6a2fc4"/><stop offset="1" stop-color="#c55bc8"/></linearGradient></defs>
+    <rect width="200" height="200" fill="url(#artFm)"/>
+    <circle cx="146" cy="44" r="27" fill="#fff4fc"/>
+    <g fill="#fff"><circle class="blink" cx="30" cy="30" r="2"/><circle cx="70" cy="18" r="1.500"/><circle class="blink" cx="100" cy="52" r="1.800"/><circle cx="24" cy="74" r="1.500"/></g>
+    <path d="M86 56c-5-7-14-1-8 6l8 8 8-8c6-7-3-13-8-6Z" fill="#ff8fd0"/>
+    <path d="M0 128C50 98 130 96 200 124V200H0Z" fill="#170a40"/>
+    <g fill="#170a40"><circle cx="72" cy="78" r="9"/><path d="M61 118c0-22 3-30 11-30s11 8 11 30Z"/><path d="M58 118l6-22h16l6 22Z"/><circle cx="100" cy="72" r="10"/><path d="M90 116V90c0-5 4-7 10-7s10 2 10 7v26Z"/><path d="M81 96l10-2v5l-10 3Z"/></g>
+    <g fill="#170a40"><path d="M128 110c0-9 4-14 10-14s8 5 8 14Z"/><circle cx="139" cy="93" r="6"/><path d="M134 90l1-7 4 4ZM144 90l-1-7-4 4Z"/><path d="M146 108c8 0 10-8 6-13" fill="none" stroke="#170a40" stroke-width="3"/></g>
+  </svg>`
 };
 
 function go(tab) {
@@ -537,7 +644,7 @@ function renderHome() {
   const inc = S.tx.filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
   const exp = S.tx.filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
-  return `<h1>${greeting()}, ${esc(S.me.name)}</h1>
+  return `<h1 class="hello">${greeting()}, ${esc(S.me.name)}</h1>
   ${monthBar()}
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
