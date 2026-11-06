@@ -42,6 +42,8 @@ button.full{width:100%;margin-top:10px}
 .seg::-webkit-scrollbar{display:none}
 .seg button{background:rgba(255,255,255,.05);color:var(--ink);border:1px solid var(--line);padding:9px 15px;white-space:nowrap;font-weight:500;border-radius:99px;box-shadow:none}
 .seg button.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 4px 16px rgba(139,92,246,.45)}
+.seg.fit{gap:6px}
+.seg.fit button{flex:1;padding:9px 6px;font-size:14px}
 .monthbar{display:flex;align-items:center;justify-content:space-between;margin:4px 0}
 .monthbar b::first-letter{text-transform:uppercase}
 .monthbar b{font-family:"Unbounded","Golos Text",sans-serif;font-weight:500;font-size:15px}
@@ -115,6 +117,7 @@ nav button.on{color:var(--brand)}
 .chips button:active{background:var(--grad)}
 .chk{display:flex;align-items:center;gap:10px;margin:8px 0;color:var(--mute);font-size:14px}
 .chk input{width:20px;height:20px;margin:0;accent-color:#a78bfa;flex:none}
+.offbar{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.35);color:#fde68a;border-radius:14px;padding:10px 12px;margin:8px 0;font-size:14px}
 .toast{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:60;background:#2a1a55;border:1px solid var(--line);color:var(--ink);padding:11px 18px;border-radius:99px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:rise .25s;max-width:90vw;text-align:center}
 .pi{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .pi:last-child{border:0}
@@ -134,15 +137,29 @@ nav button.on{color:var(--brand)}
 .confetti{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
 .confetti i{position:absolute;width:9px;height:14px;border-radius:3px;opacity:0;animation:fall 1.5s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes fall{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--rot))}}
+.cols{display:flex;align-items:stretch;gap:2px;height:170px;margin-top:12px;border-bottom:1px solid var(--line)}
+button.mcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;background:none;border-radius:0;padding:0;box-shadow:none;font-weight:400;color:var(--mute);font-size:12px}
+.mcol i{display:block;width:100%;max-width:24px;min-height:2px;border-radius:4px 4px 0 0;background:rgba(167,139,250,.38)}
+.mcol.on i{background:#a78bfa}
+.mcol.on{color:var(--ink);font-weight:600}
+.mcol span{white-space:nowrap}
+.colx{display:flex;gap:2px;margin-top:6px}
+.colx span{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--mute)}
+.colx span.on{color:var(--ink);font-weight:600}
+.hbar{height:8px;margin-top:6px;border-radius:0 4px 4px 0;background:#a78bfa;min-width:2px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+<script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>')</script>
 <script>
 // ====== НАСТРОЙКА: вставьте данные вашего проекта Supabase ======
-const SUPABASE_URL = 'https://ykyxcsuuflwavetdeodi.supabase.co';
+const DIRECT_URL = 'https://ykyxcsuuflwavetdeodi.supabase.co';
+// На своём хостинге (не GitHub Pages) всё идёт через proxy.php на том же домене: так работает и там, где supabase.co закрыт.
+const PROXY_MODE = /^https?:$/.test(location.protocol) && !/\.github\.io$/i.test(location.hostname);
+const SUPABASE_URL = PROXY_MODE ? location.origin + location.pathname.replace(/[^/]*$/, '') + 'proxy.php' : DIRECT_URL;
 const SUPABASE_KEY = 'sb_publishable_0LkdL2668ZJFuKinRxJJUw_PMGEi1Co';
 // ================================================================
 
@@ -160,7 +177,8 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             token: null, inbox: [], autoReady: false, carry: 0, carryReady: false,
             goals: [], deposits: [], goalsReady: false, limSub: 'cats',
             photos: [], photosReady: false, urls: {},
-            rules: [], rulesReady: false, skipped: new Set() };
+            rules: [], rulesReady: false, skipped: new Set(), offline: false,
+            recur: [], recurReady: false, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -175,6 +193,15 @@ const partner = () => S.members.find(m => m.user_id !== S.user.id);
 // ---------- загрузка ----------
 async function load() {
   const { data: ms, error } = await sb.from('members').select('*');
+  if (error && isNetErr(error)) {
+    const snap = lsGet('fb_snap');
+    if (snap && snap.uid === S.user.id) {
+      applySnap(snap); S.offline = true; S.tx = mergePending(S.tx);
+      if (!S.booted) { S.booted = true; subscribe(); }
+      return render();
+    }
+    return fail({ message: 'Нет связи с сервером. Откройте приложение, когда появится интернет: после первого входа оно будет работать и без сети.' });
+  }
   if (error) return fail(error);
   S.members = ms || [];
   S.me = S.members.find(m => m.user_id === S.user.id);
@@ -185,9 +212,54 @@ async function load() {
   if (!S.booted) { S.booted = true; subscribe(); }
 }
 
-async function refresh() {
+// ---------- офлайн: снимок данных и очередь новых операций ----------
+const isNetErr = e => !!e && /failed to fetch|networkerror|network request|load failed|fetch|timed? ?out|abort|^proxy:|offline/i.test(String(e.message || e));
+const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const SNAP_KEYS = ['cats', 'tx', 'members', 'household', 'products', 'pantry', 'staples', 'stores', 'prices', 'goals', 'deposits',
+  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady'];
+function saveSnap() {
+  const o = { uid: S.user.id, at: Date.now(), month: S.month.getTime() };
+  SNAP_KEYS.forEach(k => { o[k] = S[k]; });
+  o.tx = (S.tx || []).filter(t => !t._pending);
+  lsSet('fb_snap', o);
+}
+function applySnap(o) {
+  SNAP_KEYS.forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
+  if (o.month !== S.month.getTime()) S.tx = [];
+  S.me = (S.members || []).find(m => m.user_id === S.user.id) || null;
+}
+const queue = () => lsGet('fb_q') || [];
+function mergePending(list) {
   const [from, to] = monthRange();
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru] = await Promise.all([
+  const have = new Set(list.map(t => t.id));
+  const extra = queue().filter(q => !have.has(q.id) && q.date >= from && q.date < to)
+    .map(q => ({ ...q, user_id: S.user.id, created_at: new Date().toISOString(), _pending: true }));
+  return extra.length ? [...extra, ...list].sort((x, y) => y.date.localeCompare(x.date)) : list;
+}
+// отправить накопленные операции; true, если очередь пуста
+async function flushQueue() {
+  let q = queue();
+  while (q.length) {
+    const { _msg, ...row } = q[0];
+    const { error } = await sb.from('transactions').insert(row);
+    if (error && isNetErr(error)) return false;
+    if (error && error.code !== '23505') toast('Операция на ' + fmt(+row.amount) + ' не принята: ' + error.message, 6000);
+    q = q.slice(1); lsSet('fb_q', q);
+  }
+  return true;
+}
+function offlineBar() {
+  const n = queue().length;
+  if (!S.offline && !n) return '';
+  return `<div class="offbar">${S.offline ? 'Нет связи, показаны сохранённые данные.' : 'Отправляем сохранённые операции.'}${n ? ' Ждут отправки: ' + n + '.' : ''}
+    <button class="link" id="retry" style="padding:0 0 0 6px">Повторить</button></div>`;
+}
+
+async function refresh(opts = {}) {
+  if (queue().length) await flushQueue();
+  const [from, to] = monthRange();
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -204,13 +276,31 @@ async function refresh() {
     sb.from('goals').select('*').order('created_at'),
     sb.from('goal_deposits').select('*').order('created_at', { ascending: false }),
     sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
-    sb.from('category_rules').select('*').order('keyword')
+    sb.from('category_rules').select('*').order('keyword'),
+    sb.from('recurring_payments').select('*').order('day')
   ]);
+  if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
+    // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
+    const wasOffline = S.offline;
+    S.offline = true;
+    if (!S.cats.length && !S.tx.length) { const snap = lsGet('fb_snap'); if (snap && snap.uid === S.user.id) applySnap(snap); }
+    S.tx = mergePending(S.tx.filter(x => !x._pending));
+    if (!wasOffline || !opts.poll) render();
+    startPolling();
+    return;
+  }
+  const wasOff = S.offline;
+  S.offline = false;
   if (hh.data) S.household = hh.data;
   S.carryReady = !cr.error;
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
-  S.cats = c.data; S.tx = t.data; S.members = m.data;
+  const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
+    gl.data, gd.data, ph.data, ru.data, rp.data, S.month.getTime(), queue().length, wasOff]);
+  if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
+  S._sig = sig;
+  S.dataVer++;
+  S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data;
   S.foodReady = !(pr.error || pa.error || sp.error || sr.error || pc.error);
   S.products = S.foodReady ? pr.data : [];
   S.pantry = S.foodReady ? pa.data : [];
@@ -222,23 +312,39 @@ async function refresh() {
   S.deposits = (S.goalsReady && gd.data) || [];
   S.rulesReady = !ru.error;
   S.rules = (S.rulesReady && ru.data) || [];
+  S.recurReady = !rp.error;
+  S.recur = (S.recurReady && rp.data) || [];
   S.photosReady = !ph.error;
   S.photos = (S.photosReady && ph.data) || [];
   S.autoReady = !(tk.error || ib.error);
   S.token = S.autoReady ? tk.data : null;
   S.inbox = S.autoReady ? ib.data : [];
+  saveSnap();
   render();
 }
 
+let pollTimer = null;
+// периодическое обновление: нужно на своём хостинге (там нет realtime), при потере связи и при ожидающих операциях
+function startPolling() {
+  if (pollTimer || typeof setInterval !== 'function') return;
+  pollTimer = setInterval(() => {
+    if (!S.me || document.hidden) return;
+    if (PROXY_MODE || S.offline || queue().length) refresh({ poll: true });
+  }, 25000);
+}
+
 function subscribe() {
+  startPolling();
+  if (typeof window.addEventListener === 'function') window.addEventListener('online', () => { if (S.me) refresh(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me) refresh(); });
+  if (PROXY_MODE) return;                    // через proxy.php нет realtime: данные подтягиваются опросом
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me) refresh(); });
 }
 
 function fail(e) {
@@ -337,17 +443,19 @@ function render() {
   else {
     body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b></div>`;
     if (S.tab === 'tx') body += monthBar() + renderTx();
-    else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : renderLimits());
+    else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
     else body += renderMore();
   }
-  $('#app').innerHTML = `<div class="wrap">${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
+  $('#app').innerHTML = `<div class="wrap">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
-  if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : openAdd();
+  if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
+  if ($('#retry')) $('#retry').onclick = () => refresh();
   if (S.tab === 'home') countUp();
   if (S.tab === 'photos') hydratePhotos();
+  if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
   bindTab();
 }
@@ -442,7 +550,7 @@ function renderTx() {
     }
     const cat = S.cats.find(c => c.id === t.category_id);
     rows += `<div class="tx" data-id="${t.id}"><div>
-      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}</div>
+      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}${t._pending ? '<span class="badge">ждёт отправки</span>' : ''}</div>
       <div class="mute">${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
       <div class="amt ${t.kind === 'income' ? 'inc' : ''}">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div></div>`;
   }
@@ -486,6 +594,10 @@ function renderMore() {
   <div class="card"><b>Автокатегории</b>
     ${S.rulesReady ? `<div class="mute">Правил: ${S.rules.length}. Операции из банка получают категорию по слову из текста, например «пятёрочка» → Продукты.</div><button class="ghost full" id="rules">Правила</button>`
       : '<p class="mute">Выполните файл update-8.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p>'}</div>
+  <div class="card"><b>Резервная копия</b>
+    <div class="mute">Сохраните файл на телефон или в облако. Секретный токен автоимпорта в файлы не попадает, сами фотографии тоже.</div>
+    <button class="ghost full" id="excsv">Операции для Excel (CSV)</button>
+    <button class="ghost full" id="exjson">Все данные (JSON)</button></div>
   <button class="ghost full" id="lo">Выйти</button>`;
 }
 
@@ -495,6 +607,11 @@ function bindTab() {
   $('#app').querySelectorAll('.ph[data-id]').forEach(el => el.onclick = () => openViewer(el.dataset.id));
   $('#app').querySelectorAll('.goal').forEach(el => el.onclick = () => openGoal(el.dataset.g));
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
+  $('#app').querySelectorAll('.recur').forEach(el => el.onclick = () => openRecur(el.dataset.r));
+  if ($('#arc')) $('#arc').onclick = () => openRecurForm(null);
+  $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); refresh(); });
+  if ($('#excsv')) $('#excsv').onclick = exportCsv;
+  if ($('#exjson')) $('#exjson').onclick = exportJson;
   $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; render(); });
   $('#app').querySelectorAll('.pi[data-p]').forEach(el => el.onclick = () => openStockItem(el.dataset.p));
   $('#app').querySelectorAll('.pi[data-s]').forEach(el => el.onclick = () => openStaple(el.dataset.s));
@@ -559,10 +676,17 @@ function openAdd() {
     const amount = parseFloat($('#am').value.replace(',', '.'));
     if (!(amount > 0)) return $('#err').textContent = 'Введите сумму';
     $('#sv').disabled = true;
-    const { error } = await sb.from('transactions').insert({
-      household_id: S.household.id, kind, amount, category_id: $('#ct').value || null,
+    const row = {
+      id: crypto.randomUUID(), household_id: S.household.id, kind, amount, category_id: $('#ct').value || null,
       shared, note: $('#nt').value.trim() || null, date: $('#dt').value || today()
-    });
+    };
+    const { error } = await sb.from('transactions').insert(row);
+    if (error && isNetErr(error)) {                 // нет связи: сохраняем на телефоне, отправим позже
+      lsSet('fb_q', [...queue(), row]);
+      S.tx = mergePending(S.tx.filter(x => !x._pending));
+      closeSheet(); render();
+      return toast('Нет связи. Операция сохранена на телефоне и отправится сама.', 4500);
+    }
     if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
     closeSheet(); refresh();
   };
@@ -571,6 +695,15 @@ function openAdd() {
 function openTx(id) {
   const t = S.tx.find(x => x.id === id); if (!t) return;
   const cat = S.cats.find(c => c.id === t.category_id);
+  if (t._pending) {
+    sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
+      <p class="mute">Операция сохранена на телефоне и ждёт связи, чтобы отправиться.${t.note ? '<br>' + esc(t.note) : ''}</p>
+      <button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>
+      <button class="ghost full" id="cl">Закрыть</button>`);
+    $('#cl').onclick = closeSheet;
+    $('#dl').onclick = () => { lsSet('fb_q', queue().filter(q => q.id !== id)); S.tx = S.tx.filter(x => x.id !== id); closeSheet(); render(); };
+    return;
+  }
   const own = t.user_id === S.user.id || (S.me && S.me.role === 'owner');
   sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
     <p>${esc(cat ? cat.name : 'Без категории')} · ${esc(t.date)}<br><span class="mute">${esc(nameOf(t.user_id))}${t.shared ? ' · общий' : ' · личный'}${t.note ? ' · ' + esc(t.note) : ''}</span></p>
@@ -1253,11 +1386,13 @@ function paceInfo(inc, exp) {
   const dim = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 0).getDate();
   const day = n.getDate();
   const left = dim - day + 1;                       // дней до конца месяца, включая сегодня
-  const remaining = pool - exp;
+  const { unpaid, paid } = recurTotals();           // неоплаченные платежи резервируем заранее
+  const remaining = pool - exp - unpaid;
   return {
-    plan, base, carry, saved, pool, dim, day, left, remaining,
+    plan, base, carry, saved, pool, dim, day, left, remaining, unpaid,
     perDay: remaining > 0 ? remaining / left : 0,
-    projected: day >= 3 ? exp / day * dim : null    // прогноз по среднему темпу трат
+    // прогноз: обычные траты по среднему темпу плюс платежи, которые бывают раз в месяц
+    projected: day >= 3 ? (exp - paid) / day * dim + paid + unpaid : null
   };
 }
 
@@ -1282,10 +1417,11 @@ function renderPace(inc, exp) {
   }
   const src = (p.plan ? 'плановый бюджет ' : 'доходы месяца ') + fmt(p.base)
     + (p.carry ? (p.carry > 0 ? ' + перенос ' : ' − долг прошлых месяцев ') + fmt(Math.abs(p.carry)) : '')
-    + (p.saved ? ' − отложено на цели ' + fmt(p.saved) : '');
+    + (p.saved ? ' − отложено на цели ' + fmt(p.saved) : '')
+    + (p.unpaid ? ' − впереди платежи ' + fmt(p.unpaid) : '');
   return `<div class="card hero">
     <div class="mute">Осталось на день</div>
-    <div ${over ? '' : `data-n="${Math.round(p.perDay)}" `}class="big ${over ? 'txt-bad' : ''}">${over ? 'Перерасход ' + fmt(-p.remaining) : fmt(p.perDay)}</div>
+    <div ${over ? '' : `data-n="${Math.round(p.perDay)}" `}class="big ${over ? 'txt-bad' : ''}">${over ? (exp > p.pool ? 'Перерасход ' : 'Не хватает ') + fmt(-p.remaining) : fmt(p.perDay)}</div>
     <div class="mute">${over ? '' : 'Осталось ' + fmt(p.remaining) + ' на ' + p.left + ' дн. · '}${src}</div>
     <div class="bar"><i class="${cls}" style="width:${pc}%"></i></div>
     <div class="mute" style="margin-top:6px">Сегодня потрачено ${fmt(spentToday)}</div>
@@ -1320,7 +1456,7 @@ function openPlan() {
 
 
 // ---------- цели накоплений ----------
-const limSeg = () => `<div class="seg"><button data-ls="cats" class="${S.limSub === 'cats' ? 'on' : ''}">Лимиты</button><button data-ls="goals" class="${S.limSub === 'goals' ? 'on' : ''}">Цели</button></div>`;
+const limSeg = () => `<div class="seg fit"><button data-ls="cats" class="${S.limSub === 'cats' ? 'on' : ''}">Лимиты</button><button data-ls="goals" class="${S.limSub === 'goals' ? 'on' : ''}">Цели</button><button data-ls="recur" class="${S.limSub === 'recur' ? 'on' : ''}">Платежи</button><button data-ls="charts" class="${S.limSub === 'charts' ? 'on' : ''}">Графики</button></div>`;
 
 function goalSums() {
   const [from, to] = monthRange();
@@ -1724,7 +1860,289 @@ function openRules() {
   };
 }
 
+// ---------- повторяющиеся платежи ----------
+// Операции сами не создаются (их присылает банк): платёж оплачен, если в месяце есть связанная операция
+// или расход с ключевым словом в тексте. Из нескольких подходящих берём ближайший по сумме.
+function recurStatus() {
+  const [from] = monthRange();
+  const y = S.month.getFullYear(), m = S.month.getMonth();
+  const dim = new Date(y, m + 1, 0).getDate();
+  const used = new Set(), tx = {};
+  S.recur.forEach(r => {
+    const t = S.tx.find(x => x.recurring_id === r.id && !used.has(x.id));
+    if (t) { tx[r.id] = t; used.add(t.id); }
+  });
+  S.recur.forEach(r => {
+    if (tx[r.id] || !r.keyword) return;
+    const kw = norm(r.keyword);
+    const t = S.tx.filter(x => x.kind === 'expense' && !x.recurring_id && !used.has(x.id) && norm(x.note).includes(kw))
+      .sort((a, b) => Math.abs(a.amount - r.amount) - Math.abs(b.amount - r.amount))[0];
+    if (t) { tx[r.id] = t; used.add(t.id); }
+  });
+  const dayNow = isCurMonth() ? new Date().getDate() : S.month > new Date() ? 0 : dim + 1;
+  return S.recur.map(r => {
+    const day = Math.min(r.day, dim);
+    const skip = r.skip_month === from;
+    return { r, day, skip, tx: tx[r.id] || null, late: !tx[r.id] && !skip && day < dayNow };
+  });
+}
+function recurTotals() {
+  let unpaid = 0, paid = 0;
+  recurStatus().forEach(x => { if (x.tx) paid += +x.tx.amount; else if (!x.skip) unpaid += +x.r.amount; });
+  return { unpaid, paid };
+}
+
+function renderRecur() {
+  if (!S.recurReady) {
+    return '<div class="card"><b>Платежи</b><p class="mute">Выполните файл update-9.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+  }
+  const list = recurStatus();
+  const { unpaid, paid } = recurTotals();
+  const rows = list.map(x => {
+    const st = x.tx ? 'оплачено ' + new Date(x.tx.date + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+      : x.skip ? 'в этом месяце не платим' : (x.late ? 'просрочено, день ' : 'день ') + x.day;
+    return `<div class="pi recur" data-r="${x.r.id}"><div><div>${esc(x.r.name)}</div>
+      <div class="mute ${x.late ? 'txt-bad' : x.tx ? 'txt-good' : ''}">${st}</div></div>
+      <div class="amt">${fmt(x.tx ? +x.tx.amount : +x.r.amount)}</div></div>`;
+  }).join('');
+  return `<div class="card"><div class="mute">${isCurMonth() ? 'Впереди в этом месяце' : 'Не оплачено за месяц'}</div>
+    <div class="big">${fmt(unpaid)}</div>
+    <div class="mute">Оплачено ${fmt(paid)}. Неоплаченные платежи текущего месяца заранее вычитаются из «осталось на день».</div></div>
+    <div class="card">${rows || '<div class="empty">Платежей пока нет.<br>Добавьте аренду, кредит или подписку.</div>'}</div>
+    <button class="ghost full" id="arc">+ Новый платёж</button>`;
+}
+
+function openRecurForm(id) {
+  const r = id ? S.recur.find(x => x.id === id) : null;
+  if (id && !r) return;
+  sheet(`<b>${r ? 'Платёж' : 'Новый платёж'}</b>
+    <input id="rn" value="${esc(r ? r.name : '')}" placeholder="Название, например: Аренда">
+    <input id="ra" type="number" inputmode="decimal" min="0" step="0.01" value="${r ? +r.amount : ''}" placeholder="Сумма, ₽">
+    <input id="rd" type="number" inputmode="numeric" min="1" max="31" step="1" value="${r ? r.day : ''}" placeholder="День месяца, 1–31">
+    <input id="rw" value="${esc(r ? r.keyword || '' : '')}" placeholder="Слово из уведомления банка (необязательно)" autocapitalize="off">
+    <div class="mute">По этому слову платёж отметится оплаченным сам. Берите слово поточнее: «яндекс плюс», а не «яндекс».</div>
+    <select id="rc"><option value="">Без категории</option>${S.cats.filter(c => c.kind === 'expense').map(c => `<option value="${c.id}"${r && c.id === r.category_id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <div class="err" id="err"></div>
+    <button class="full" id="sv">Сохранить</button>
+    ${r ? '<button class="ghost full" id="dl" style="color:var(--bad)">Удалить платёж</button>' : ''}
+    <button class="link full" id="cl">${r ? 'Назад' : 'Отмена'}</button>`);
+  $('#cl').onclick = r ? () => openRecur(id) : closeSheet;
+  $('#sv').onclick = async () => {
+    const name = $('#rn').value.trim(), amount = parseNum($('#ra').value), day = parseInt($('#rd').value, 10);
+    if (!name) return $('#err').textContent = 'Введите название';
+    if (!(amount > 0)) return $('#err').textContent = 'Введите сумму';
+    if (!(day >= 1 && day <= 31)) return $('#err').textContent = 'День месяца: от 1 до 31';
+    const row = { name, amount, day, keyword: $('#rw').value.trim() || null, category_id: $('#rc').value || null };
+    $('#sv').disabled = true;
+    const { error } = r ? await sb.from('recurring_payments').update(row).eq('id', id)
+      : await sb.from('recurring_payments').insert({ household_id: S.household.id, ...row });
+    if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
+    closeSheet(); refresh();
+  };
+  if ($('#dl')) $('#dl').onclick = async () => {
+    if (!confirm(`Удалить платёж «${r.name}»? Операции останутся.`)) return;
+    const { error } = await sb.from('recurring_payments').delete().eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+}
+
+function openRecur(id) {
+  const x = recurStatus().find(s => s.r.id === id);
+  if (!x) return;
+  const r = x.r, [from] = monthRange();
+  const open = !x.tx && !x.skip;
+  sheet(`<b>${esc(r.name)}</b>
+    <div class="big">${fmt(+r.amount)}</div>
+    <div class="mute">Каждый месяц, день ${x.day}${r.keyword ? ' · слово из банка: ' + esc(r.keyword) : ''}</div>
+    ${x.tx ? `<p class="txt-good">Оплачено: ${fmt(+x.tx.amount)}, ${esc(x.tx.date)}</p>` : ''}
+    ${open ? `${r.keyword ? '<p class="mute">Придёт из банка и отметится само. Кнопка ниже нужна, только если платили не с этого счёта: иначе операция задвоится.</p>' : ''}
+      <input id="pa" type="number" inputmode="decimal" min="0" step="0.01" value="${+r.amount}" placeholder="Сумма, ₽">
+      <button class="full" id="py">Оплачено, внести операцию</button>` : ''}
+    <div class="err" id="err"></div>
+    ${open ? '<button class="ghost full" id="sk">В этом месяце не платим</button>' : ''}
+    ${x.skip ? '<button class="ghost full" id="uk">Всё же платим в этом месяце</button>' : ''}
+    <button class="ghost full" id="ed">Изменить платёж</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#ed').onclick = () => openRecurForm(id);
+  const setSkip = async v => {
+    const { error } = await sb.from('recurring_payments').update({ skip_month: v }).eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+  if ($('#sk')) $('#sk').onclick = () => setSkip(from);
+  if ($('#uk')) $('#uk').onclick = () => setSkip(null);
+  if ($('#py')) $('#py').onclick = async () => {
+    const amount = parseNum($('#pa').value);
+    if (!(amount > 0)) return $('#err').textContent = 'Введите сумму';
+    $('#py').disabled = true;
+    const row = {
+      id: crypto.randomUUID(), household_id: S.household.id, kind: 'expense', amount, category_id: r.category_id, shared: true,
+      note: r.name, date: isCurMonth() ? today() : `${from.slice(0, 8)}${pad(x.day)}`, recurring_id: r.id
+    };
+    const { error } = await sb.from('transactions').insert(row);
+    if (error && isNetErr(error)) {
+      lsSet('fb_q', [...queue(), row]);
+      S.tx = mergePending(S.tx.filter(t => !t._pending));
+      closeSheet(); render();
+      return toast('Нет связи. Операция сохранена на телефоне и отправится сама.', 4500);
+    }
+    if (error) { $('#py').disabled = false; return $('#err').textContent = error.message; }
+    closeSheet(); refresh();
+  };
+}
+
+
+// ---------- графики: расходы по месяцам и по категориям ----------
+const CHART_MONTHS = 6;
+const ymOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+const shiftedMonth = k => new Date(S.month.getFullYear(), S.month.getMonth() + k, 1);
+
+// PostgREST отдаёт не больше 1000 строк за раз, поэтому читаем страницами
+async function fetchAll(build) {
+  const out = [];
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await build().range(i, i + 999);
+    if (error) throw error;
+    out.push(...(data || []));
+    if (!data || data.length < 1000) return out;
+  }
+}
+
+async function hydrateCharts() {
+  const at = S.month.getTime(), key = at + '|' + S.dataVer;
+  if (S.offline || S.histKey === key) return;
+  S.histKey = key;
+  try {
+    const from = ymOf(shiftedMonth(1 - CHART_MONTHS)) + '-01', to = monthRange()[1];
+    const rows = await fetchAll(() => sb.from('transactions').select('id,amount,category_id,date')
+      .eq('kind', 'expense').gte('date', from).lt('date', to).order('id'));
+    if (S.histKey !== key) return;
+    S.hist = rows; S.histFor = at; S.histErr = false;
+  } catch (e) {
+    if (S.histKey !== key) return;
+    S.histErr = true;
+  }
+  if (S.tab === 'lim' && S.limSub === 'charts') render();
+}
+
+function renderCharts() {
+  if (S.offline) return '<div class="card"><div class="empty">Графикам нужна связь с сервером.</div></div>';
+  if (S.histErr) return '<div class="card"><div class="empty">Не удалось загрузить данные. Попробуйте обновить приложение.</div></div>';
+  if (!S.hist || S.histFor !== S.month.getTime()) return '<div class="card"><div class="empty">Загружаем…</div></div>';
+  const months = Array.from({ length: CHART_MONTHS }, (_, i) => shiftedMonth(i + 1 - CHART_MONTHS));
+  const ym = ymOf(S.month), prevYm = ymOf(shiftedMonth(-1));
+  const sums = {};
+  S.hist.forEach(t => { const k = t.date.slice(0, 7); sums[k] = (sums[k] || 0) + +t.amount; });
+  const max = Math.max(1, ...months.map(d => sums[ymOf(d)] || 0));
+  const cols = months.map(d => {
+    const k = ymOf(d), v = sums[k] || 0, on = k === ym;
+    const full = d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    return `<button class="mcol ${on ? 'on' : ''}" data-m="${d.getTime()}" aria-label="${esc(full)}: ${fmt(v)}" title="${esc(full)}: ${fmt(v)}">
+      ${on ? `<span>${fmt(v)}</span>` : ''}<i style="height:${v / max * 130}px"></i></button>`;
+  }).join('');
+  const labels = months.map(d => `<span class="${ymOf(d) === ym ? 'on' : ''}">${esc(d.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', ''))}</span>`).join('');
+
+  // текущий месяц ещё не закончился: сравниваем с теми же днями прошлого месяца
+  const cut = isCurMonth() ? new Date().getDate() : 31;
+  const cur = {}, prev = {};
+  let prevTotal = 0;
+  S.hist.forEach(t => {
+    const k = t.date.slice(0, 7), c = t.category_id || '';
+    if (k === ym) cur[c] = (cur[c] || 0) + +t.amount;
+    else if (k === prevYm && +t.date.slice(8) <= cut) { prev[c] = (prev[c] || 0) + +t.amount; prevTotal += +t.amount; }
+  });
+  const total = sums[ym] || 0, diff = total - prevTotal;
+  const pm = shiftedMonth(-1).toLocaleDateString('ru-RU', { month: 'long' });
+  const prevDays = new Date(S.month.getFullYear(), S.month.getMonth(), 0).getDate();
+  const span = isCurMonth() ? `с 1 по ${Math.min(cut, prevDays)} число, ${pm}` : pm;
+  const change = v => (Math.round(v) === 0 ? 'столько же' : (v > 0 ? 'на ' + fmt(v) + ' больше' : 'на ' + fmt(-v) + ' меньше'));
+  const name = id => id ? ((S.cats.find(c => c.id === id) || {}).name || 'Без категории') : 'Без категории';
+  const list = Object.keys(cur).sort((a, b) => cur[b] - cur[a]);
+  const top = list.length ? cur[list[0]] : 1;
+  const rows = list.map(c => `<div class="cat" style="cursor:default"><div class="row"><span>${esc(name(c))}</span><b>${fmt(cur[c])}</b></div>
+    <div class="hbar" style="width:${cur[c] / top * 100}%"></div>
+    <div class="mute" style="margin-top:4px">${prev[c] ? change(cur[c] - prev[c]) : 'в прошлом месяце за эти дни трат не было'}</div></div>`).join('');
+  return `<div class="card"><b>Расходы по месяцам</b>
+      <div class="mute">Нажмите на столбик, чтобы открыть месяц</div>
+      <div class="cols">${cols}</div><div class="colx">${labels}</div></div>
+    <div class="card"><div class="mute">Расходы за месяц</div><div class="big">${fmt(total)}</div>
+      <div class="mute">${change(diff)}, чем: ${esc(span)}</div></div>
+    <div class="card"><b>По категориям</b>${rows || '<div class="empty">В этом месяце расходов нет.</div>'}</div>`;
+}
+
+
+// ---------- резервная копия ----------
+// Отдельная кнопка «Сохранить»: Safari разрешает «Поделиться» только сразу после нажатия, а файл готовится дольше
+function saveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  sheet(`<b>Файл готов</b>
+    <p class="mute" style="overflow-wrap:anywhere">${esc(name)}</p>
+    <button class="full" id="sv">Сохранить</button>
+    <button class="ghost full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#sv').onclick = async () => {
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return closeSheet(); }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    closeSheet();
+  };
+}
+
+// разделитель «;» и запятая в суммах: так файл открывается в русском Excel. Текст из банка не должен стать формулой.
+const csvCell = v => {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+function txCsv(rows) {
+  const catName = id => (S.cats.find(c => c.id === id) || {}).name || '';
+  const head = ['Дата', 'Тип', 'Сумма', 'Категория', 'Заметка', 'Кто', 'Общая'];
+  const body = rows.map(t => [t.date, t.kind === 'income' ? 'Доход' : 'Расход', String(+t.amount).replace('.', ','),
+    catName(t.category_id), t.note, nameOf(t.user_id), t.shared ? 'да' : 'нет'].map(csvCell).join(';'));
+  return '﻿' + [head.join(';'), ...body].join('\r\n') + '\r\n';
+}
+
+async function exportCsv() {
+  const t = toast('Готовим файл…', 0);
+  try {
+    const rows = await fetchAll(() => sb.from('transactions').select('*').order('date', { ascending: false }).order('id'));
+    saveFile(`operacii-${today()}.csv`, txCsv(rows), 'text/csv');
+  } catch (e) { toast('Не удалось выгрузить: ' + (e.message || e), 5000); }
+  t.remove();
+}
+
+const BACKUP_TABLES = ['households', 'members', 'categories', 'transactions', 'category_rules', 'recurring_payments', 'goals', 'goal_deposits',
+  'bank_inbox', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'photos'];
+async function exportJson() {
+  const t = toast('Готовим файл…', 0);
+  try {
+    const out = { exported_at: new Date().toISOString() };
+    for (const tb of BACKUP_TABLES) {
+      out[tb] = await fetchAll(() => sb.from(tb).select('*').order(tb === 'members' ? 'user_id' : 'id'));
+    }
+    saveFile(`semya-kopiya-${today()}.json`, JSON.stringify(out, null, 1), 'application/json');
+  } catch (e) { toast('Не удалось выгрузить: ' + (e.message || e), 5000); }
+  t.remove();
+}
+
+
 // ---------- запуск ----------
+function storedUser() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (/^sb-.*-auth-token$/.test(k)) { const v = JSON.parse(localStorage.getItem(k)); return (v && (v.user || (v.currentSession && v.currentSession.user))) || null; }
+    }
+  } catch (e) {}
+  return null;
+}
+
 (async function init() {
   try { history.replaceState(null, ''); } catch (e) {}
   if (SUPABASE_URL.startsWith('ВСТАВЬТЕ')) {
@@ -1735,8 +2153,19 @@ function openRules() {
     if (ev === 'SIGNED_OUT') { S.user = null; S.me = null; renderAuth(); }
     else if (session && (!S.user || S.user.id !== session.user.id)) { S.user = session.user; load(); }
   });
+  if (typeof navigator.serviceWorker === 'object' && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
   const { data } = await sb.auth.getSession();
-  if (!data.session) renderAuth();
+  if (!data.session) {
+    // нет сети и просрочен вход: открываем сохранённые данные, вход обновится сам, когда сеть появится
+    const snap = lsGet('fb_snap'), user = storedUser();
+    if (snap && user && snap.uid === user.id && navigator.onLine === false) {
+      S.user = user; applySnap(snap); S.offline = true; S.tx = mergePending(S.tx);
+      S.booted = true; subscribe(); return render();
+    }
+    renderAuth();
+  }
 })();
 </script>
 </body>
