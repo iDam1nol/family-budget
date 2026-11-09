@@ -1351,9 +1351,11 @@ function openShop() {
       <div class="mute">${x.unknown ? 'нет цены у позиций: ' + x.unknown : 'цены есть на всё'}${best !== null && x.unknown === 0 && x.total === best ? ' · дешевле всего' : ''}</div></div>`).join('')
       || '<div class="mute" style="margin-bottom:8px">Магазинов пока нет. Добавьте первый, чтобы вводить цены и сравнивать.</div>'}
     <button class="ghost full" id="addstore">+ Магазин</button>
+    <button class="full" id="bought">Купил, добавить в запасы</button>
     <button class="ghost full" id="cl">Закрыть</button>`);
   $('#cl').onclick = closeSheet;
   $('#addstore').onclick = () => editStore(null);
+  $('#bought').onclick = () => openBought(null);
   document.querySelectorAll('#sh [data-st]').forEach(el => el.onclick = () => openStore(el.dataset.st));
 }
 
@@ -1372,7 +1374,9 @@ function openStore(sid) {
     <button class="full" id="go">Перейти в магазин</button>
     <div class="mute" id="msg" style="margin-top:6px">Список покупок скопируется, и откроется сайт магазина.</div>
     <button class="ghost full" id="cp">Скопировать список</button>
+    <button class="ghost full" id="bought">Купил, добавить в запасы</button>
     <button class="link full" id="es">Изменить магазин</button>`);
+  $('#bought').onclick = () => openBought(sid);
   const calc = () => {
     const t = storeTotals(items, st, local);
     $('#tot').textContent = fmt(t.total);
@@ -1409,6 +1413,64 @@ function openStore(sid) {
       }
     };
   });
+}
+
+// ----- «Купил»: купленное попадает в запасы дома -----
+// Расход сам не создаётся: покупку по карте пришлёт банк, и она бы задвоилась. Отметка «внести расход» только для наличных.
+function openBought(sid) {
+  const st = sid ? S.stores.find(x => x.id === sid) : null;
+  const items = missing();
+  if (!items.length) return openShop();
+  const unitFor = it => it.p.kind === 'count' ? 'шт' : it.need >= 1000 ? (it.p.kind === 'mass' ? 'кг' : 'л') : (it.p.kind === 'mass' ? 'г' : 'мл');
+  const qtyText = it => { const u = unitFor(it); return +(it.need / UNITS[u][1]).toFixed(3) + ' ' + u; };
+  const expCats = S.cats.filter(c => c.kind === 'expense');
+  const guessCat = (expCats.find(c => /продукт|еда/i.test(c.name)) || {}).id || '';
+  sheet(`<b>Что купили${st ? ' в «' + esc(st.name) + '»' : ''}</b>
+    <p class="mute">Отмеченное попадёт в запасы дома. Количество можно поправить, например «1.5 кг» или «2 шт».</p>
+    ${items.map((it, i) => `<div class="pi" style="cursor:default"><label class="chk" style="margin:0;flex:1;min-width:0;color:var(--ink)"><input type="checkbox" id="bi${i}" checked><span>${esc(it.p.name)}</span></label>
+      <input id="bq${i}" value="${esc(qtyText(it))}" style="width:104px;margin:0;text-align:right"></div>`).join('')}
+    <label class="chk"><input type="checkbox" id="bcash"><span>Платили не картой: внести расход</span></label>
+    <div id="bcashbox" style="display:none">
+      <input id="bam" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Сумма, ₽">
+      <select id="bct"><option value="">Без категории</option>${expCats.map(c => `<option value="${c.id}"${c.id === guessCat ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+    <div class="mute">Покупку по карте приложение получит от банка само, расход вносить не нужно.</div>
+    <div class="err" id="err"></div>
+    <button class="full" id="bsv">Добавить в запасы</button>
+    <button class="link full" id="cl">Назад</button>`);
+  $('#cl').onclick = () => st ? openStore(sid) : openShop();
+  $('#bcash').onchange = () => {
+    $('#bcashbox').style.display = $('#bcash').checked ? '' : 'none';
+    if ($('#bcash').checked && !$('#bam').value && st) {     // подсказка суммы по ценам этого магазина
+      const sum = items.reduce((s, it, i) => s + ($('#bi' + i).checked ? lineCost(it, priceOf(it.p.id, st.id)) || 0 : 0), 0);
+      if (sum > 0) $('#bam').value = Math.round(sum);
+    }
+  };
+  $('#bsv').onclick = async () => {
+    const err = t => { $('#err').textContent = t; };
+    const rows = [];
+    for (let i = 0; i < items.length; i++) {
+      if (!$('#bi' + i).checked) continue;
+      const it = items[i], q = parseQty($('#bq' + i).value, it.p.kind);
+      if (!(q > 0)) return err('Не понял количество у «' + it.p.name + '». Пример: ' + KIND_UNITS[it.p.kind].map(u => '2 ' + u).join(' или '));
+      rows.push({ household_id: S.household.id, product_id: it.p.id, qty: q, expires_on: null });
+    }
+    if (!rows.length) return err('Отметьте хотя бы один продукт');
+    const cash = $('#bcash').checked, amount = parseNum($('#bam').value);
+    if (cash && !(amount > 0)) return err('Введите сумму расхода');
+    $('#bsv').disabled = true;
+    const { error } = await sb.from('pantry_items').insert(rows);
+    if (error) { $('#bsv').disabled = false; return err(error.message); }
+    if (cash) {
+      const { error: e2 } = await sb.from('transactions').insert({
+        id: crypto.randomUUID(), household_id: S.household.id, kind: 'expense', amount, category_id: $('#bct').value || null,
+        shared: true, note: 'Продукты' + (st ? ' · ' + st.name : ''), date: today()
+      });
+      if (e2) toast('Запасы пополнены, но расход не сохранился: ' + e2.message, 6000);
+    }
+    sound('success');
+    closeSheet(); refresh();
+    toast('Добавлено в запасы: ' + rows.length + (cash ? ', расход внесён' : ''));
+  };
 }
 
 function editStore(sid) {
