@@ -202,7 +202,11 @@ button.cday.on{background:var(--grad)}
 @keyframes petal{to{transform:translate3d(70px,110vh,0) rotate(540deg)}}
 button.ghost,.seg button:not(.on),.top button,.monthbar button{background:rgba(38,20,78,.9)}
 .sheet button.ghost,.sheet .seg button:not(.on){background:rgba(255,255,255,.07)}
-h1.hello{margin-top:66px}
+.hello-row{display:flex;align-items:center;gap:12px;margin-top:66px}
+.hello-row h1.hello{flex:1;min-width:0;margin:10px 0 6px;font-size:19px}
+button.iconbtn{flex:none;width:46px;height:46px;padding:0;border-radius:50%;background:rgba(38,20,78,.9);border:1px solid var(--line);box-shadow:0 6px 18px rgba(8,2,24,.45);display:grid;place-items:center}
+.iconbtn svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:1.7;stroke-linejoin:round;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.iconbtn:active svg{transform:rotate(60deg)}
 h1,.top b,.monthbar b,.day{text-shadow:0 1px 8px rgba(8,2,24,.9)}
 .tile{justify-content:flex-end;background:#2a1257}
 .tile::before{content:"";position:absolute;left:0;right:0;bottom:0;height:62%;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(16,6,42,0),rgba(16,6,42,.82))}
@@ -666,7 +670,7 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
-  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела' };
+  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
   let body = '';
   if (S.tab === 'home') body = renderHome();
   else {
@@ -675,13 +679,14 @@ function render() {
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
+    else if (S.tab === 'settings') body += renderSettings();
     else if (S.tab === 'todo') body += (S.todoSub === 'cal' ? monthBar() : '') + todoSeg() + (S.todoSub === 'cal' ? renderCal() : renderTodo());
     else body += renderMore();
   }
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
   const enter = S._enter ? ' enter-' + S._enter : '';
   S._enter = null;
-  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
+  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
@@ -690,7 +695,8 @@ function render() {
   if (S.tab === 'home') countUp();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
-  if (S.tab === 'more') hydratePush();
+  if (S.tab === 'settings') hydratePush();
+  if ($('#gear')) $('#gear').onclick = () => go('settings');
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
   bindTab();
 }
@@ -740,7 +746,8 @@ function renderHome() {
   const inc = counted().filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
   const exp = counted().filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
-  return `<h1 class="hello">${greeting()}, ${esc(S.me.name)}</h1>
+  return `<div class="hello-row"><h1 class="hello">${greeting()}, ${esc(S.me.name)}</h1>
+    <button class="iconbtn" id="gear" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.75 10.13L20.99 10.03L20.99 13.97L18.75 13.87L18.09 15.45L19.75 16.96L16.96 19.75L15.45 18.09L13.87 18.75L13.97 20.99L10.03 20.99L10.13 18.75L8.55 18.09L7.04 19.75L4.25 16.96L5.91 15.45L5.25 13.87L3.01 13.97L3.01 10.03L5.25 10.13L5.91 8.55L4.25 7.04L7.04 4.25L8.55 5.91L10.13 5.25L10.03 3.01L13.97 3.01L13.87 5.25L15.45 5.91L16.96 4.25L19.75 7.04L18.09 8.55Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   ${monthBar()}
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
@@ -824,14 +831,24 @@ function renderLimits() {
     <button class="ghost full" id="ac">+ Новая категория</button>`;
 }
 
+// «Семья»: участники и то, что надо разобрать; всё настраиваемое — в «Настройках» (шестерёнка на главной)
 function renderMore() {
-  return `<h1>Ещё</h1>
-  <div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
-  <div class="card"><div class="mute">Семья «${esc(S.household.name)}»</div>
+  return `<div class="card"><div class="mute">Семья «${esc(S.household.name)}»</div>
     <div>${S.members.map(m => esc(m.name)).join(', ')}</div>
     ${S.members.length < 2 ? `<p>Код приглашения для второго участника:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.invite_code)}</div>
     <div class="mute">Пусть партнёр зарегистрируется в приложении и выберет «Меня пригласили».</div>` : ''}</div>
-  ${renderAuto()}
+  ${renderInboxCard()}
+  <div class="mute" style="padding:0 4px">Уведомления, автоимпорт, резервная копия и выход — в настройках: значок шестерёнки на главном экране.</div>`;
+}
+
+function renderSettings() {
+  return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
+  <div class="card"><b>Уведомления</b>
+    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты.</div>
+    <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
+  <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
+    <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
+  ${renderAutoImport()}
   <div class="card"><b>Автокатегории</b>
     ${S.rulesReady ? `<div class="mute">Правил: ${S.rules.length}. Операции из банка получают категорию по слову из текста, например «пятёрочка» → Продукты.</div><button class="ghost full" id="rules">Правила</button>`
       : '<p class="mute">Выполните файл update-8.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p>'}</div>
@@ -839,11 +856,6 @@ function renderMore() {
     <div class="mute">Сохраните файл на телефон или в облако. Секретный токен автоимпорта в файлы не попадает, сами фотографии тоже.</div>
     <button class="ghost full" id="excsv">Операции для Excel (CSV)</button>
     <button class="ghost full" id="exjson">Все данные (JSON)</button></div>
-  <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
-    <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
-  <div class="card"><b>Уведомления</b>
-    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты.</div>
-    <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <button class="ghost full" id="lo">Выйти</button>`;
 }
 
@@ -1787,20 +1799,26 @@ function editStore(sid) {
 }
 
 // ---------- Автоимпорт из банка и «Входящие» ----------
-function renderAuto() {
-  if (!S.autoReady) {
-    return '<div class="card"><b>Автоимпорт из банка</b><p class="mute">Выполните файл update-3.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
-  }
+// «Входящие из банка» и сверка: в «Семье», это работа, а не настройка
+function renderInboxCard() {
+  if (!S.autoReady) return '';
   const inbox = S.inbox.length
     ? `<div class="mute">Не удалось распознать автоматически: ${S.inbox.length}</div><button class="full" id="inbox">Разобрать</button>`
     : '<div class="mute">Всё распознано, разбирать нечего.</div>';
+  return `<div class="card"><b>Входящие из банка</b>${inbox}${bankSummary()}</div>`;
+}
+
+// включение автоимпорта и токен для команды на iPhone: в «Настройках»
+function renderAutoImport() {
+  if (!S.autoReady) {
+    return '<div class="card"><b>Автоимпорт из банка</b><p class="mute">Выполните файл update-3.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+  }
   const auto = S.token
     ? `<div class="mute">Включён. Новые операции из банка: <b>${S.token.shared ? 'общие' : 'личные'}</b></div>
        <button class="ghost full" id="tkshow">Токен и настройки</button>`
     : `<p class="mute">Операции из уведомлений банка будут появляться сами. Нужна разовая настройка команды на iPhone.</p>
        <button class="full" id="tkon">Включить автоимпорт</button>`;
-  return `<div class="card"><b>Входящие из банка</b>${inbox}${bankSummary()}</div>
-    <div class="card"><b>Автоимпорт из банка</b>${auto}</div>`;
+  return `<div class="card"><b>Автоимпорт из банка</b>${auto}</div>`;
 }
 
 const fmtWhen = d => new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -2914,11 +2932,27 @@ async function disablePush() {
   hydratePush();
 }
 
+// понятная причина ошибки функции: код ответа и текст, который она вернула (шаги — из НАСТРОЙКА-УВЕДОМЛЕНИЙ.md)
+async function pushErrorText(error) {
+  const res = error && error.context;
+  let status = 0, text = '';
+  if (res && typeof res.status === 'number') {
+    status = res.status;
+    try { const b = await res.clone().json(); text = b.error || b.message || b.msg || JSON.stringify(b); }
+    catch (e) { try { text = await res.text(); } catch (e2) {} }
+  }
+  if (status === 404) return 'Функция push-digest не найдена. Проверьте, что она установлена и называется ровно push-digest (шаг 2).';
+  if (status === 401 && !/нужен вход/.test(text)) return 'У функции включена проверка JWT. Выключите Verify JWT в её настройках (шаг 2, пункт 4). (' + (text || 'код 401') + ')';
+  if (status === 401) return 'Сервер не узнал вход. Выйдите из приложения и войдите снова.';
+  if (status) return 'Ошибка функции (код ' + status + '): ' + (text || 'без пояснения') + '. Шаги 2–3 инструкции.';
+  return 'Сервер уведомлений не ответил. Проверьте, что функция push-digest установлена по инструкции. (' + ((error && error.message) || 'нет ответа') + ')';
+}
+
 async function testPush() {
   pushMsg('Отправляем…');
   try {
     const { data, error } = await sb.functions.invoke(PUSH_FN, { body: { test: true } });
-    if (error) return pushMsg('Сервер уведомлений не ответил. Проверьте, что функция push-digest установлена по инструкции. (' + error.message + ')');
+    if (error) return pushMsg(await pushErrorText(error));
     pushMsg(data && data.sent ? 'Отправлено. Уведомление должно прийти в течение минуты.' : 'Сервер ответил, но отправлять было некуда: ' + ((data && data.note) || 'нет подписок'));
   } catch (e) { pushMsg('Не получилось: ' + (e.message || e)); }
 }
@@ -3039,7 +3073,7 @@ function sound(name) {
 const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap],.task,.meal,[data-rcp]';
 function soundFor(el) {
   if (el.matches('.seg button,.monthbar button,.mcol')) return 'tab';
-  if (el.matches('.tile,#bk')) return 'nav';
+  if (el.matches('.tile,#bk,#gear')) return 'nav';
   if (el.matches('.fab')) return 'add';
   if (el.matches('#dl,#vd')) return 'danger';
   return 'tap';
