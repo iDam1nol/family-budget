@@ -169,7 +169,24 @@ button.mcol{overflow:visible}
 .enter-sub .seg button.on{animation:segpop .3s cubic-bezier(.34,1.56,.64,1)}
 @keyframes segpop{from{transform:scale(.88)}to{transform:none}}
 .enter-back .tile{animation:tilein .34s cubic-bezier(.34,1.56,.64,1) both}
-.enter-back .t2{animation-delay:.04s}.enter-back .t4{animation-delay:.08s}.enter-back .t3{animation-delay:.12s}.enter-back .t5{animation-delay:.16s}
+.enter-back .t2{animation-delay:.04s}.enter-back .t4{animation-delay:.08s}.enter-back .t3{animation-delay:.12s}.enter-back .t6{animation-delay:.16s}.enter-back .t5{animation-delay:.2s}
+.t6{background:linear-gradient(135deg,#4c1d95,#7c3aed 60%,#db2777)}
+.task{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer;transition:background-color .15s}
+.task:last-child{border:0}
+.task:active{background:rgba(167,139,250,.12)}
+.task .ttl{overflow-wrap:anywhere}
+.task.done .ttl{text-decoration:line-through;color:var(--mute)}
+button.tchk{flex:none;width:30px;height:30px;padding:0;border-radius:50%;background:transparent;border:2px solid #a78bfa;box-shadow:none;color:#fff;font-size:15px;line-height:1}
+.task.done button.tchk{background:var(--grad);border-color:transparent;animation:segpop .3s cubic-bezier(.34,1.56,.64,1)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .wd{font-size:12px;color:var(--mute);padding:2px 0}
+button.cday{background:rgba(255,255,255,.05);border:1px solid transparent;box-shadow:none;border-radius:12px;padding:6px 0 4px;min-height:48px;display:flex;flex-direction:column;align-items:center;gap:4px;font-weight:500;color:var(--ink)}
+button.cday.today{border-color:#a78bfa}
+button.cday.on{background:var(--grad)}
+.cday i,.legend i{display:inline-flex;gap:2px;height:6px;font-style:normal}
+.cday i b,.legend b{display:inline-block;width:6px;height:6px;border-radius:50%;background:#e9d5ff}
+.cday i b.dp,.legend b.dp{background:var(--warn)}
+.legend{display:flex;gap:14px;justify-content:center;font-size:12px;color:var(--mute);margin-top:10px}
 @keyframes tilein{from{transform:scale(.86);opacity:0}to{transform:none;opacity:1}}
 .enter-sub .mcol i{transform-origin:bottom;animation:growy .42s cubic-bezier(.2,.8,.2,1)}
 .enter-sub .hbar{transform-origin:left;animation:growx .42s cubic-bezier(.2,.8,.2,1)}
@@ -259,6 +276,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             goals: [], deposits: [], goalsReady: false, limSub: 'cats',
             photos: [], photosReady: false, urls: {},
             rules: [], rulesReady: false, skipped: new Set(), offline: false,
+            tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
@@ -298,7 +316,7 @@ const isNetErr = e => !!e && /failed to fetch|networkerror|network request|load 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const SNAP_KEYS = ['cats', 'tx', 'members', 'household', 'products', 'pantry', 'staples', 'stores', 'prices', 'goals', 'deposits',
-  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady'];
+  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady'];
 function saveSnap() {
   const o = { uid: S.user.id, at: Date.now(), month: S.month.getTime() };
   SNAP_KEYS.forEach(k => { o[k] = S[k]; });
@@ -373,7 +391,7 @@ async function refresh(opts = {}) {
   if (queue().length) await flushQueue();
   const [from, to] = monthRange();
   const since = new Date(Date.now() - 62 * 864e5).toISOString();   // для сверки с банком: уведомления за два месяца
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -392,7 +410,8 @@ async function refresh(opts = {}) {
     sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
     sb.from('category_rules').select('*').order('keyword'),
     sb.from('recurring_payments').select('*').order('day'),
-    sb.from('bank_inbox').select('*').gte('received_at', since).order('received_at').limit(1000)
+    sb.from('bank_inbox').select('*').gte('received_at', since).order('received_at').limit(1000),
+    sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(500)
   ]);
   if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
     // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
@@ -412,11 +431,13 @@ async function refresh(opts = {}) {
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
   const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
-    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
+    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
   if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
   S._sig = sig;
   S.dataVer++;
   S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data; S.txMonth = S.month.getTime();
+  S.tasksReady = !tq.error;
+  S.tasks = (S.tasksReady && tq.data) || [];
   S.bankReady = !bk.error;
   S.bank = (S.bankReady && bk.data) || [];
   S.foodReady = !(pr.error || pa.error || sp.error || sr.error || pc.error);
@@ -459,7 +480,7 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -592,6 +613,28 @@ const ICONS = {
     <path d="M0 128C50 98 130 96 200 124V200H0Z" fill="#170a40"/>
     <g fill="#170a40"><circle cx="72" cy="78" r="9"/><path d="M61 118c0-22 3-30 11-30s11 8 11 30Z"/><path d="M58 118l6-22h16l6 22Z"/><circle cx="100" cy="72" r="10"/><path d="M90 116V90c0-5 4-7 10-7s10 2 10 7v26Z"/><path d="M81 96l10-2v5l-10 3Z"/></g>
     <g fill="#170a40"><path d="M128 110c0-9 4-14 10-14s8 5 8 14Z"/><circle cx="139" cy="93" r="6"/><path d="M134 90l1-7 4 4ZM144 90l-1-7-4 4Z"/><path d="M146 108c8 0 10-8 6-13" fill="none" stroke="#170a40" stroke-width="3"/></g>
+  </svg>`,
+  // листок календаря с сегодняшним числом ({{D}}), список с галочками, бумажный журавлик
+  todo: `<svg class="art" viewBox="0 0 400 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artTd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b1a86"/><stop offset=".55" stop-color="#7a2fbf"/><stop offset="1" stop-color="#c0369f"/></linearGradient></defs>
+    <rect width="400" height="130" fill="url(#artTd)"/>
+    <g transform="rotate(-4 74 66)">
+      <rect x="26" y="18" width="96" height="98" rx="10" fill="#fff6fd"/>
+      <path d="M26 28a10 10 0 0 1 10-10h76a10 10 0 0 1 10 10v14H26Z" fill="#ec5fb3"/>
+      <g fill="#3b1a86"><rect x="46" y="10" width="6" height="18" rx="3"/><rect x="96" y="10" width="6" height="18" rx="3"/></g>
+      <text x="74" y="96" text-anchor="middle" font-family="Unbounded,Golos Text,sans-serif" font-weight="700" font-size="44" fill="#3b1a86">{{D}}</text>
+    </g>
+    <g transform="rotate(5 196 66)">
+      <rect x="146" y="24" width="100" height="84" rx="8" fill="#2a1466" stroke="#c9a6ff" stroke-width="2"/>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M158 46l5 5 9-10M158 70l5 5 9-10" stroke="#7df0c4" stroke-width="3"/>
+        <rect x="157" y="88" width="13" height="13" rx="4" stroke="#e9d5ff" stroke-width="2"/>
+        <path d="M182 47h50M182 71h42M182 95h48" stroke="#e9d5ff" stroke-width="4" opacity=".75"/>
+      </g>
+    </g>
+    <g transform="translate(272 30)"><path d="M0 34 30 0l8 30Z" fill="#fff"/><path d="M38 30 30 0l36 22Z" fill="#f3dcff"/><path d="M0 34l38-4-6 14Z" fill="#e2c3ff"/></g>
+    <g fill="#fff"><circle class="blink" cx="258" cy="20" r="2"/><circle cx="356" cy="18" r="1.600"/><circle class="blink" cx="372" cy="58" r="2"/><circle cx="136" cy="14" r="1.500"/></g>
+    <g fill="#ffc2e6"><circle cx="352" cy="44" r="5"/><circle cx="330" cy="70" r="4"/><circle cx="140" cy="118" r="4"/></g>
   </svg>`
 };
 
@@ -615,7 +658,7 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
-  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья' };
+  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела' };
   let body = '';
   if (S.tab === 'home') body = renderHome();
   else {
@@ -624,6 +667,7 @@ function render() {
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
+    else if (S.tab === 'todo') body += (S.todoSub === 'cal' ? monthBar() : '') + todoSeg() + (S.todoSub === 'cal' ? renderCal() : renderTodo());
     else body += renderMore();
   }
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
@@ -631,7 +675,7 @@ function render() {
   S._enter = null;
   $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
-  if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
+  if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
@@ -703,6 +747,7 @@ function renderHome() {
     <button class="tile t2" data-t="lim">${ICONS.lim}<div><b>Лимиты</b><span>Задано: ${limits}</span></div></button>
     <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? 'Докупить: ' + missing().length : 'нужно обновить базу'}</span></div></button>
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
+    <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${!S.tasksReady ? 'нужно обновить базу' : todayTasks().length ? 'На сегодня: ' + todayTasks().length : openTasks().length ? 'Всего дел: ' + openTasks().length : 'Дел нет'}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
   </div>`;
 }
@@ -799,6 +844,11 @@ function bindTab() {
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
   $('#app').querySelectorAll('.recur').forEach(el => el.onclick = () => openRecur(el.dataset.r));
   $('#app').querySelectorAll('[data-gap]').forEach(el => el.onclick = () => openGap(el.dataset.gap));
+  $('#app').querySelectorAll('[data-ts]').forEach(b => b.onclick = () => { S.todoSub = b.dataset.ts; S._enter = 'sub'; render(); });
+  $('#app').querySelectorAll('.task').forEach(el => el.onclick = e => { if (e && e.target && e.target.closest && e.target.closest('[data-tdone]')) return; openTask(el.dataset.task); });
+  $('#app').querySelectorAll('[data-tdone]').forEach(b => b.onclick = e => { if (e) e.stopPropagation(); toggleTask(b.dataset.tdone); });
+  $('#app').querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { S.calDay = b.dataset.cd; render(); });
+  if ($('#tadd')) $('#tadd').onclick = () => openTask(null, { due: S.calDay });
   if ($('#arc')) $('#arc').onclick = () => openRecurForm(null);
   $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); S._enter = 'sub'; refresh(); });
   if ($('#excsv')) $('#excsv').onclick = exportCsv;
@@ -2422,6 +2472,118 @@ async function exportJson() {
 }
 
 
+// ---------- общие дела и календарь ----------
+const todoSeg = () => `<div class="seg"><button data-ts="list" class="${S.todoSub !== 'cal' ? 'on' : ''}">Список</button><button data-ts="cal" class="${S.todoSub === 'cal' ? 'on' : ''}">Календарь</button></div>`;
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv'); };
+const dayLabel = d => new Date(d + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' });
+const openTasks = () => S.tasks.filter(t => !t.done);
+const todayTasks = () => openTasks().filter(t => t.due && t.due <= today());     // на сегодня и просроченные
+const sortTasks = list => list.slice().sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999')
+  || (a.due_time || '99').localeCompare(b.due_time || '99') || String(a.created_at).localeCompare(String(b.created_at)));
+const tasksNeedSql = '<div class="card"><b>Дела</b><p class="mute">Выполните файл update-12.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+
+function taskMeta(t) {
+  const td = today(), parts = [];
+  if (t.due) parts.push(t.due < td && !t.done ? 'просрочено, ' + dayLabel(t.due) : t.due === td ? 'сегодня' : t.due === addDays(td, 1) ? 'завтра' : dayLabel(t.due));
+  if (t.due_time) parts.push(t.due_time.slice(0, 5));
+  parts.push(t.assignee ? nameOf(t.assignee) : 'общее');
+  return parts.join(' · ');
+}
+function taskRow(t) {
+  const late = !t.done && t.due && t.due < today();
+  return `<div class="task${t.done ? ' done' : ''}" data-task="${t.id}"><button class="tchk" data-tdone="${t.id}" aria-label="${t.done ? 'Вернуть в работу' : 'Отметить сделанным'}">${t.done ? '✓' : ''}</button>
+    <div style="min-width:0;flex:1"><div class="ttl">${esc(t.title)}</div><div class="mute${late ? ' txt-bad' : ''}">${esc(taskMeta(t))}</div></div></div>`;
+}
+
+function renderTodo() {
+  if (!S.tasksReady) return tasksNeedSql;
+  const td = today(), tm = addDays(td, 1), open = sortTasks(openTasks());
+  const groups = [['Просрочено', open.filter(t => t.due && t.due < td)], ['Сегодня', open.filter(t => t.due === td)],
+    ['Завтра', open.filter(t => t.due === tm)], ['Позже', open.filter(t => t.due && t.due > tm)], ['Без даты', open.filter(t => !t.due)]];
+  const done = S.tasks.filter(t => t.done).sort((a, b) => String(b.done_at || '').localeCompare(String(a.done_at || ''))).slice(0, 15);
+  const body = groups.filter(g => g[1].length).map(([l, list]) => `<div class="day">${l}</div><div class="card">${list.map(taskRow).join('')}</div>`).join('');
+  return (body || '<div class="card"><div class="empty">Дел нет.<br>Нажмите +, чтобы добавить.</div></div>')
+    + (done.length ? `<div class="day">Сделано</div><div class="card">${done.map(taskRow).join('')}</div>` : '');
+}
+
+function renderCal() {
+  if (!S.tasksReady) return tasksNeedSql;
+  const y = S.month.getFullYear(), m = S.month.getMonth(), ym = ymOf(S.month), td = today();
+  const dim = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;   // неделя с понедельника
+  if (!S.calDay || S.calDay.slice(0, 7) !== ym) S.calDay = td.slice(0, 7) === ym ? td : ym + '-01';
+  const pays = S.recurReady ? recurStatus().filter(x => !x.skip) : [];
+  let cells = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => `<div class="wd">${d}</div>`).join('') + '<div></div>'.repeat(lead);
+  for (let d = 1; d <= dim; d++) {
+    const iso = `${ym}-${pad(d)}`;
+    const n = openTasks().filter(t => t.due === iso).length, p = pays.some(x => x.day === d && !x.tx);
+    cells += `<button class="cday${iso === td ? ' today' : ''}${iso === S.calDay ? ' on' : ''}" data-cd="${iso}" aria-label="${d}${n ? ', дел: ' + n : ''}${p ? ', платёж' : ''}"><span>${d}</span><i>${'<b></b>'.repeat(Math.min(n, 3))}${p ? '<b class="dp"></b>' : ''}</i></button>`;
+  }
+  const day = +S.calDay.slice(8);
+  const list = sortTasks(S.tasks.filter(t => t.due === S.calDay));
+  const payRows = pays.filter(x => x.day === day).map(x => `<div class="pi" style="cursor:default"><div><div>Платёж: ${esc(x.r.name)}</div>
+    <div class="mute${x.tx ? ' txt-good' : x.late ? ' txt-bad' : ''}">${x.tx ? 'оплачено' : x.late ? 'просрочено' : 'по плану'}</div></div><div class="amt">${fmt(x.tx ? +x.tx.amount : +x.r.amount)}</div></div>`).join('');
+  const label = new Date(S.calDay + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'long' });
+  return `<div class="card"><div class="cal">${cells}</div>
+      <div class="legend"><span><i><b></b></i> дела</span>${S.recurReady ? '<span><i><b class="dp"></b></i> платежи</span>' : ''}</div></div>
+    <div class="day">${esc(label)}</div>
+    <div class="card">${list.map(taskRow).join('') + payRows || '<div class="mute">На этот день ничего нет.</div>'}
+      <button class="ghost full" id="tadd">+ Дело на этот день</button></div>`;
+}
+
+function openTask(id, pre = {}) {
+  const t = id ? S.tasks.find(x => x.id === id) : null;
+  if (id && !t) return;
+  const v = t || { title: '', due: pre.due || '', due_time: '', assignee: null };
+  sheet(`<b>${t ? 'Дело' : 'Новое дело'}</b>
+    <input id="tt" value="${esc(v.title)}" placeholder="Что сделать, например: записать кота к врачу" maxlength="300">
+    <div class="row" style="gap:8px"><input id="tdt" type="date" value="${esc(v.due || '')}" style="flex:1"><input id="ttm" type="time" value="${esc((v.due_time || '').slice(0, 5))}" style="width:116px"></div>
+    <div class="mute">Дату и время можно не указывать.</div>
+    <select id="tas"><option value="">Общее</option>${S.members.map(m => `<option value="${m.user_id}"${m.user_id === v.assignee ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+    <div class="err" id="err"></div>
+    <button class="full" id="tsv">Сохранить</button>
+    ${t ? `<button class="ghost full" id="tdn">${t.done ? 'Вернуть в работу' : 'Сделано'}</button><button class="ghost full" id="tdl" style="color:var(--bad)">Удалить</button>` : ''}
+    <button class="link full" id="cl">Отмена</button>`);
+  if (!t && $('#tt').focus) $('#tt').focus();
+  $('#cl').onclick = closeSheet;
+  const sqlHint = e => /tasks|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-12.sql в Supabase' : e.message;
+  $('#tsv').onclick = async () => {
+    const title = $('#tt').value.trim(), due = $('#tdt').value || null, time = $('#ttm').value || null;
+    if (!title) return $('#err').textContent = 'Напишите, что сделать';
+    if (time && !due) return $('#err').textContent = 'Для времени укажите и дату';
+    const row = { title, due, due_time: time, assignee: $('#tas').value || null };
+    $('#tsv').disabled = true;
+    const { data, error } = t ? await sb.from('tasks').update(row).eq('id', id).select()
+      : await sb.from('tasks').insert({ household_id: S.household.id, ...row }).select();
+    $('#tsv').disabled = false;
+    if (error) return $('#err').textContent = sqlHint(error);
+    if (!data || !data.length) return $('#err').textContent = 'Не удалось сохранить';
+    closeSheet(); refresh();
+  };
+  if ($('#tdn')) $('#tdn').onclick = () => { closeSheet(); toggleTask(id); };
+  if ($('#tdl')) $('#tdl').onclick = async () => {
+    if (!confirm('Удалить дело «' + t.title + '»?')) return;
+    const { error } = await sb.from('tasks').delete().eq('id', id);
+    if (error) return $('#err').textContent = sqlHint(error);
+    closeSheet(); refresh();
+  };
+}
+
+// отметка «сделано» видна сразу, сервер догоняет; при ошибке возвращаем как было
+async function toggleTask(id) {
+  const t = S.tasks.find(x => x.id === id);
+  if (!t) return;
+  const was = { done: t.done, done_at: t.done_at };
+  t.done = !t.done; t.done_at = t.done ? new Date().toISOString() : null;
+  if (t.done) sound('success');
+  render();
+  const { data, error } = await sb.from('tasks').update({ done: t.done, done_at: t.done_at }).eq('id', id).select();
+  if (error || !data || !data.length) {
+    Object.assign(t, was); render();
+    toast('Не удалось сохранить: ' + (error ? error.message : 'нет связи'), 4000);
+  }
+}
+
+
 // ---------- сверка с банком ----------
 // В уведомлении банка есть остаток после операции. Между двумя соседними уведомлениями остаток должен
 // измениться ровно на сумму второй операции. Если не сходится, какое-то уведомление не дошло.
@@ -2534,7 +2696,7 @@ function sound(name) {
   } catch (e) {}
 }
 
-const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap]';
+const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap],.task';
 function soundFor(el) {
   if (el.matches('.seg button,.monthbar button,.mcol')) return 'tab';
   if (el.matches('.tile,#bk')) return 'nav';
