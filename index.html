@@ -54,6 +54,8 @@ button.full{width:100%;margin-top:10px}
 .day{font-size:13px;color:var(--brand);margin:16px 4px 4px;font-weight:500}
 .tx{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
 .tx:last-child{border:0}
+.tx.off{opacity:.55}
+.tx.off .amt{text-decoration:line-through}
 .tx .amt{font-weight:600;white-space:nowrap}
 .amt.inc{color:var(--good)}
 .badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);background:rgba(167,139,250,.1);color:var(--mute);margin-left:4px}
@@ -678,9 +680,12 @@ function countUp() {
   requestAnimationFrame(step);
 }
 
+// операции, которые входят в суммы: «не учитывать» остаются в списке, но не считаются нигде
+const counted = (list = S.tx) => list.filter(t => !t.excluded);
+
 function renderHome() {
-  const inc = S.tx.filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
-  const exp = S.tx.filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
+  const inc = counted().filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
+  const exp = counted().filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
   return `<h1 class="hello">${greeting()}, ${esc(S.me.name)}</h1>
   ${monthBar()}
@@ -705,7 +710,7 @@ function renderHome() {
 function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); S._enter = 'sub'; refresh(); }
 
 function sortable() {
-  return S.tx.filter(t => !t.category_id && !S.skipped.has(t.id)
+  return S.tx.filter(t => !t.category_id && !t.excluded && !S.skipped.has(t.id)
     && (t.user_id === S.user.id || (S.me && S.me.role === 'owner'))
     && S.cats.some(c => c.kind === t.kind));
 }
@@ -722,8 +727,8 @@ function renderTx() {
   const seg = [['all', 'Все'], ['shared', 'Общие'], ['mine', 'Мои'], ['other', p ? p.name : 'Партнёр']]
     .map(([k, l]) => `<button data-f="${k}" class="${S.filter === k ? 'on' : ''}">${esc(l)}</button>`).join('');
   const list = visibleTx();
-  const inc = list.filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
-  const exp = list.filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
+  const inc = counted(list).filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
+  const exp = counted(list).filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   let rows = '', last = '';
   for (const t of list) {
     if (t.date !== last) {
@@ -731,8 +736,8 @@ function renderTx() {
       rows += `<div class="day">${new Date(t.date + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' })}</div>`;
     }
     const cat = S.cats.find(c => c.id === t.category_id);
-    rows += `<div class="tx" data-id="${t.id}"><div>
-      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}${t._pending ? '<span class="badge">ждёт отправки</span>' : ''}</div>
+    rows += `<div class="tx${t.excluded ? ' off' : ''}" data-id="${t.id}"><div>
+      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}${t._pending ? '<span class="badge">ждёт отправки</span>' : ''}${t.excluded ? '<span class="badge">не учитывается</span>' : ''}</div>
       <div class="mute">${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
       <div class="amt ${t.kind === 'income' ? 'inc' : ''}">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div></div>`;
   }
@@ -746,7 +751,7 @@ function renderTx() {
 
 function renderLimits() {
   const spent = {};
-  S.tx.filter(t => t.kind === 'expense').forEach(t => spent[t.category_id] = (spent[t.category_id] || 0) + +t.amount);
+  counted().filter(t => t.kind === 'expense').forEach(t => spent[t.category_id] = (spent[t.category_id] || 0) + +t.amount);
   const cats = S.cats.filter(c => c.kind === 'expense');
   const total = cats.reduce((s, c) => s + +c.monthly_limit, 0);
   const totalSpent = Object.values(spent).reduce((a, b) => a + b, 0);
@@ -913,6 +918,8 @@ function openTx(id) {
       <input id="en" value="${esc(t.note || '')}" placeholder="Описание">
       <input id="edt" type="date" value="${esc(t.date)}">
       <label class="chk"><input type="checkbox" id="esh"${t.shared ? ' checked' : ''}><span>Общая операция</span></label>
+      <label class="chk"><input type="checkbox" id="exc"${t.excluded ? ' checked' : ''}><span>Не учитывать в бюджете и статистике</span></label>
+      <div class="mute">Для переводов между своими счетами, возвратов и пар «пришло и ушло». Операция останется в списке, но не войдёт ни в одну сумму.</div>
       <div class="err" id="eerr"></div>
       <button class="ghost full" id="esv">Сохранить изменения</button>` : ''}
     ${own ? '<button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>' : '<div class="mute">Менять и удалять может автор записи или создатель семьи.</div>'}
@@ -923,10 +930,11 @@ function openTx(id) {
     if (!(amount > 0)) return $('#eerr').textContent = 'Введите сумму';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return $('#eerr').textContent = 'Укажите дату';
     $('#esv').disabled = true;
-    const { data, error } = await sb.from('transactions')
-      .update({ amount, note: $('#en').value.trim() || null, date, shared: $('#esh').checked }).eq('id', id).select();
+    const patch = { amount, note: $('#en').value.trim() || null, date, shared: $('#esh').checked };
+    if ($('#exc').checked !== !!t.excluded) patch.excluded = $('#exc').checked;   // только если меняли: до update-11.sql колонки нет
+    const { data, error } = await sb.from('transactions').update(patch).eq('id', id).select();
     $('#esv').disabled = false;
-    if (error) return $('#eerr').textContent = error.message;
+    if (error) return $('#eerr').textContent = /excluded|column|schema cache/i.test(error.message) ? 'Чтобы отмечать «не учитывать», выполните update-11.sql в Supabase' : error.message;
     if (!data || !data.length) return $('#eerr').textContent = 'Не удалось сохранить: нет прав на эту операцию.';
     closeSheet(); refresh();
     toast('Изменения сохранены');
@@ -1622,7 +1630,7 @@ function renderPace(inc, exp) {
       <p class="mute">В этом месяце пока нет доходов и остатка. Когда придёт доход, здесь появится расчёт. Либо задайте плановый бюджет на месяц.</p>${planBtn}</div>`;
   }
   const today0 = today();
-  const spentToday = S.tx.filter(t => t.kind === 'expense' && t.date === today0).reduce((s, t) => s + +t.amount, 0);
+  const spentToday = counted().filter(t => t.kind === 'expense' && t.date === today0).reduce((s, t) => s + +t.amount, 0);
   const over = p.remaining < 0;
   const pc = Math.min(100, exp / p.pool * 100);
   const cls = exp > p.pool ? 'bad' : (exp > p.pool * .85 ? 'warn' : '');
@@ -2087,13 +2095,13 @@ function recurStatus() {
   const dim = new Date(y, m + 1, 0).getDate();
   const used = new Set(), tx = {};
   S.recur.forEach(r => {
-    const t = S.tx.find(x => x.recurring_id === r.id && !used.has(x.id));
+    const t = counted().find(x => x.recurring_id === r.id && !used.has(x.id));
     if (t) { tx[r.id] = t; used.add(t.id); }
   });
   S.recur.forEach(r => {
     if (tx[r.id] || !r.keyword) return;
     const kw = norm(r.keyword);
-    const t = S.tx.filter(x => x.kind === 'expense' && !x.recurring_id && !used.has(x.id) && norm(x.note).includes(kw))
+    const t = counted().filter(x => x.kind === 'expense' && !x.recurring_id && !used.has(x.id) && norm(x.note).includes(kw))
       .sort((a, b) => Math.abs(a.amount - r.amount) - Math.abs(b.amount - r.amount))[0];
     if (t) { tx[r.id] = t; used.add(t.id); }
   });
@@ -2234,11 +2242,12 @@ async function hydrateCharts() {
   S.histKey = key;
   try {
     const from = ymOf(shiftedMonth(1 - CHART_MONTHS)) + '-01', to = monthRange()[1];
-    const rows = await fetchAll(() => sb.from('transactions').select('id,amount,category_id,date')
+    // все поля, а не список: до update-11.sql колонки excluded нет, и запрос по имени сломал бы графики
+    const rows = await fetchAll(() => sb.from('transactions').select('*')
       .eq('kind', 'expense').gte('date', from).lt('date', to).order('id'));
     if (S.histKey !== key) return;
     if (S.histFor !== at) S._enter = 'sub';
-    S.hist = rows; S.histFor = at; S.histErr = false;
+    S.hist = counted(rows); S.histFor = at; S.histErr = false;
   } catch (e) {
     if (S.histKey !== key) return;
     S.histErr = true;
@@ -2321,9 +2330,9 @@ const csvCell = v => {
 };
 function txCsv(rows) {
   const catName = id => (S.cats.find(c => c.id === id) || {}).name || '';
-  const head = ['Дата', 'Тип', 'Сумма', 'Категория', 'Заметка', 'Кто', 'Общая'];
+  const head = ['Дата', 'Тип', 'Сумма', 'Категория', 'Заметка', 'Кто', 'Общая', 'Учитывается'];
   const body = rows.map(t => [t.date, t.kind === 'income' ? 'Доход' : 'Расход', String(+t.amount).replace('.', ','),
-    catName(t.category_id), t.note, nameOf(t.user_id), t.shared ? 'да' : 'нет'].map(csvCell).join(';'));
+    catName(t.category_id), t.note, nameOf(t.user_id), t.shared ? 'да' : 'нет', t.excluded ? 'нет' : 'да'].map(csvCell).join(';'));
   return '﻿' + [head.join(';'), ...body].join('\r\n') + '\r\n';
 }
 
