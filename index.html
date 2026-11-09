@@ -277,6 +277,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             photos: [], photosReady: false, urls: {},
             rules: [], rulesReady: false, skipped: new Set(), offline: false,
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
+            recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
@@ -316,7 +317,7 @@ const isNetErr = e => !!e && /failed to fetch|networkerror|network request|load 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const SNAP_KEYS = ['cats', 'tx', 'members', 'household', 'products', 'pantry', 'staples', 'stores', 'prices', 'goals', 'deposits',
-  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady'];
+  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady', 'recipes', 'recipeItems', 'meals', 'menuReady'];
 function saveSnap() {
   const o = { uid: S.user.id, at: Date.now(), month: S.month.getTime() };
   SNAP_KEYS.forEach(k => { o[k] = S[k]; });
@@ -391,7 +392,7 @@ async function refresh(opts = {}) {
   if (queue().length) await flushQueue();
   const [from, to] = monthRange();
   const since = new Date(Date.now() - 62 * 864e5).toISOString();   // для сверки с банком: уведомления за два месяца
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq, rc, ri, mp] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -411,7 +412,10 @@ async function refresh(opts = {}) {
     sb.from('category_rules').select('*').order('keyword'),
     sb.from('recurring_payments').select('*').order('day'),
     sb.from('bank_inbox').select('*').gte('received_at', since).order('received_at').limit(1000),
-    sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(500)
+    sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(500),
+    sb.from('recipes').select('*').order('name'),
+    sb.from('recipe_items').select('*'),
+    sb.from('meal_plan').select('*').gte('date', addDays(today(), -21)).order('date')
   ]);
   if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
     // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
@@ -431,11 +435,15 @@ async function refresh(opts = {}) {
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
   const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
-    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
+    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, rc.data, ri.data, mp.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
   if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
   S._sig = sig;
   S.dataVer++;
   S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data; S.txMonth = S.month.getTime();
+  S.menuReady = !(rc.error || ri.error || mp.error);
+  S.recipes = (S.menuReady && rc.data) || [];
+  S.recipeItems = (S.menuReady && ri.data) || [];
+  S.meals = (S.menuReady && mp.data) || [];
   S.tasksReady = !tq.error;
   S.tasks = (S.tasksReady && tq.data) || [];
   S.bankReady = !bk.error;
@@ -480,7 +488,7 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -675,13 +683,14 @@ function render() {
   S._enter = null;
   $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
-  if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
+  if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
   if (S.tab === 'home') countUp();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
+  if (S.tab === 'more') hydratePush();
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
   bindTab();
 }
@@ -832,6 +841,9 @@ function renderMore() {
     <button class="ghost full" id="exjson">Все данные (JSON)</button></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
+  <div class="card"><b>Уведомления</b>
+    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты.</div>
+    <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <button class="ghost full" id="lo">Выйти</button>`;
 }
 
@@ -857,6 +869,10 @@ function bindTab() {
   $('#app').querySelectorAll('.pi[data-p]').forEach(el => el.onclick = () => openStockItem(el.dataset.p));
   $('#app').querySelectorAll('.pi[data-s]').forEach(el => el.onclick = () => openStaple(el.dataset.s));
   if ($('#shop')) $('#shop').onclick = openShop;
+  if ($('#mwp')) { $('#mwp').onclick = () => { S.menuWeek--; S._enter = 'sub'; render(); }; $('#mwn').onclick = () => { S.menuWeek++; S._enter = 'sub'; render(); }; }
+  if ($('#recipes')) $('#recipes').onclick = openRecipes;
+  $('#app').querySelectorAll('[data-madd]').forEach(b => b.onclick = () => openMealAdd(b.dataset.madd));
+  $('#app').querySelectorAll('[data-meal]').forEach(el => el.onclick = () => openMeal(el.dataset.meal));
   if ($('#inbox')) $('#inbox').onclick = openInbox;
   if ($('#plan')) $('#plan').onclick = openPlan;
   if ($('#sort')) $('#sort').onclick = () => { S.skipped = new Set(); openSort(); };
@@ -1097,7 +1113,19 @@ function shortages() {
     return { st, p, have, need: Math.max(0, +st.min_qty - have) };
   }).filter(Boolean);
 }
-const missing = () => shortages().filter(x => x.need > 0);
+// что докупить: минимум «Всегда дома» плюс продукты для блюд из меню на ближайшие 7 дней
+function missing() {
+  const req = {};
+  S.staples.forEach(st => { req[st.product_id] = (req[st.product_id] || 0) + +st.min_qty; });
+  const menu = menuNeeds();
+  Object.keys(menu).forEach(pid => { req[pid] = (req[pid] || 0) + menu[pid]; });
+  return Object.keys(req).map(pid => {
+    const p = prod(pid);
+    if (!p) return null;
+    const have = haveQty(pid);
+    return { st: S.staples.find(x => x.product_id === pid) || null, p, have, need: Math.max(0, req[pid] - have), menu: menu[pid] || 0 };
+  }).filter(x => x && x.need > 0);
+}
 
 function expInfo(d) {
   if (!d) return { text: '', cls: '' };
@@ -1115,8 +1143,9 @@ function renderFood() {
   }
   const seg = `<div class="seg">
     <button data-sub="stock" class="${S.sub === 'stock' ? 'on' : ''}">Дома</button>
-    <button data-sub="staples" class="${S.sub === 'staples' ? 'on' : ''}">Всегда дома</button></div>`;
-  return seg + (S.sub === 'stock' ? renderStock() : renderStaples());
+    <button data-sub="staples" class="${S.sub === 'staples' ? 'on' : ''}">Всегда дома</button>
+    <button data-sub="menu" class="${S.sub === 'menu' ? 'on' : ''}">Меню</button></div>`;
+  return seg + (S.sub === 'stock' ? renderStock() : S.sub === 'menu' ? renderMenu() : renderStaples());
 }
 
 function renderStock() {
@@ -1147,6 +1176,210 @@ function renderStaples() {
       <div class="amt ${x.need > 0 ? 'txt-bad' : 'txt-good'}">${x.need > 0 ? 'не хватает ' + fmtQty(x.need, x.p.kind) : '✓'}</div></div>`).join('');
   return head + `<div class="card">${rows || '<div class="empty">Список пуст.<br>Нажмите +, чтобы добавить продукт, который всегда должен быть дома.</div>'}</div>`;
 }
+
+// ----- меню на неделю -----
+const recipeItemsOf = rid => S.recipeItems.filter(x => x.recipe_id === rid);
+const recipeOf = id => S.recipes.find(r => r.id === id);
+// сколько нужно продуктов на неприготовленные блюда с сегодня на 7 дней вперёд
+function menuNeeds() {
+  const from = today(), to = addDays(from, 7), need = {};
+  S.meals.filter(m => !m.cooked && m.date >= from && m.date < to).forEach(m =>
+    recipeItemsOf(m.recipe_id).forEach(it => { need[it.product_id] = (need[it.product_id] || 0) + +it.qty; }));
+  return need;
+}
+// чего не хватает дома для одного блюда
+function recipeLack(rid) {
+  return recipeItemsOf(rid).map(it => ({ p: prod(it.product_id), lack: +it.qty - haveQty(it.product_id) }))
+    .filter(x => x.p && x.lack > 0);
+}
+const lackText = lack => lack.map(x => x.p.name + ' ' + fmtQty(x.lack, x.p.kind)).join(', ');
+const weekStart = () => { const d = new Date(today() + 'T12:00:00'); return addDays(today(), -((d.getDay() + 6) % 7) + 7 * S.menuWeek); };
+const menuNeedSql = '<div class="card"><b>Меню</b><p class="mute">Выполните файл update-13.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+
+function renderMenu() {
+  if (!S.menuReady) return menuNeedSql;
+  const start = weekStart(), end = addDays(start, 6), td = today();
+  const short = d => new Date(d + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const canNow = S.recipes.filter(r => recipeItemsOf(r.id).length && !recipeLack(r.id).length);
+  let days = '';
+  for (let i = 0; i < 7; i++) {
+    const iso = addDays(start, i);
+    const meals = S.meals.filter(m => m.date === iso);
+    const rows = meals.map(m => {
+      const r = recipeOf(m.recipe_id); if (!r) return '';
+      const lack = m.cooked ? [] : recipeLack(r.id);
+      const st = m.cooked ? 'приготовлено' : lack.length ? 'не хватает: ' + lackText(lack) : 'всё есть дома';
+      return `<div class="pi meal" data-meal="${m.id}"><div style="min-width:0"><div>${esc(r.name)}</div>
+        <div class="mute ${m.cooked ? '' : lack.length ? 'txt-warn' : 'txt-good'}">${esc(st)}</div></div><div class="mute">${m.cooked ? '✓' : '›'}</div></div>`;
+    }).join('');
+    days += `<div class="day${iso === td ? ' txt-good' : ''}">${esc(dayLabel(iso))}${iso === td ? ' · сегодня' : ''}</div>
+      <div class="card">${rows}<button class="link" data-madd="${iso}" style="padding:${rows ? '8px 0 0' : '0'}">+ Блюдо</button></div>`;
+  }
+  const menuShort = missing().filter(x => x.menu > 0).length;
+  return `<div class="monthbar"><button class="ghost" id="mwp">‹</button><b>${esc(short(start))} – ${esc(short(end))}</b><button class="ghost" id="mwn">›</button></div>
+    <div class="card"><b>Можно приготовить из запасов</b>
+      <div class="mute">${canNow.length ? esc(canNow.map(r => r.name).join(', ')) : S.recipes.length ? 'Пока ни одно блюдо: чего-то не хватает дома.' : 'Добавьте рецепты, и приложение подскажет, что приготовить из того, что есть.'}</div>
+      ${menuShort ? `<div class="mute" style="margin-top:6px">Для меню на 7 дней не хватает продуктов: ${menuShort}. Они уже в «Что докупить».</div><button class="ghost full" id="shop">Что докупить</button>` : ''}
+      <button class="ghost full" id="recipes">Рецепты (${S.recipes.length})</button></div>
+    ${days}`;
+}
+
+function openRecipes() {
+  sheet(`<b>Рецепты</b>
+    ${S.recipes.map(r => { const lack = recipeLack(r.id), n = recipeItemsOf(r.id).length;
+      return `<div class="pi" data-rcp="${r.id}"><div style="min-width:0"><div>${esc(r.name)}</div>
+        <div class="mute ${n && !lack.length ? 'txt-good' : ''}">${!n ? 'без продуктов' : lack.length ? 'не хватает: ' + esc(lackText(lack)) : 'всё есть дома'}</div></div><div class="mute">›</div></div>`; }).join('')
+      || '<div class="empty">Рецептов пока нет.</div>'}
+    <button class="full" id="rnew">+ Новый рецепт</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#rnew').onclick = () => openRecipe(null);
+  document.querySelectorAll('#sh [data-rcp]').forEach(el => el.onclick = () => openRecipe(el.dataset.rcp));
+}
+
+// рецепт: название и продукты; новый продукт создаётся по названию, единица берётся из количества («300 г», «2 шт»)
+function openRecipe(id) {
+  const r = id ? recipeOf(id) : null;
+  if (id && !r) return;
+  const items = r ? recipeItemsOf(r.id) : [];
+  const rows = items.length + 3;
+  const qtyStr = it => { const p = prod(it.product_id); if (!p) return ''; const big = p.kind !== 'count' && +it.qty >= 1000;
+    const u = p.kind === 'count' ? 'шт' : p.kind === 'mass' ? (big ? 'кг' : 'г') : (big ? 'л' : 'мл'); return +(+it.qty / UNITS[u][1]).toFixed(3) + ' ' + u; };
+  sheet(`<b>${r ? 'Рецепт' : 'Новый рецепт'}</b>
+    <input id="rnm" value="${esc(r ? r.name : '')}" placeholder="Название, например: Омлет">
+    <div class="mute">Продукты на одно приготовление</div>
+    <datalist id="rpl">${S.products.map(p => `<option value="${esc(p.name)}">`).join('')}</datalist>
+    ${Array.from({ length: rows }, (_, i) => { const it = items[i], p = it && prod(it.product_id);
+      return `<div class="row" style="gap:8px"><input id="ri${i}" list="rpl" value="${esc(p ? p.name : '')}" placeholder="Продукт" style="flex:1" autocomplete="off"><input id="rq${i}" value="${esc(it ? qtyStr(it) : '')}" placeholder="300 г" style="width:96px"></div>`; }).join('')}
+    <div class="err" id="err"></div>
+    <button class="full" id="rsv">Сохранить</button>
+    ${r ? '<button class="ghost full" id="rdl" style="color:var(--bad)">Удалить рецепт</button>' : ''}
+    <button class="link full" id="cl">Назад</button>`);
+  $('#cl').onclick = openRecipes;
+  $('#rsv').onclick = async () => {
+    const err = t => { $('#err').textContent = t; };
+    const name = $('#rnm').value.trim();
+    if (!name) return err('Введите название');
+    const list = [];
+    for (let i = 0; i < rows; i++) {
+      const pn = $('#ri' + i).value.trim(), qs = $('#rq' + i).value.trim();
+      if (!pn && !qs) continue;
+      if (!pn) return err('Укажите продукт для количества «' + qs + '»');
+      const p = S.products.find(x => norm(x.name) === norm(pn));
+      let kind = p && p.kind, q;
+      if (p) q = parseQty(qs || '1', p.kind);
+      else {                                          // новый продукт: единица из количества
+        const m = qs.toLowerCase().match(/(шт|кг|г|мл|л)\s*$/);
+        kind = m ? UNITS[m[1]][0] : 'count';
+        q = parseQty(qs || '1', kind);
+      }
+      if (!(q > 0)) return err('Не понял количество у «' + pn + '». Пример: ' + KIND_UNITS[kind].map(u => '2 ' + u).join(' или '));
+      list.push({ pn, p, kind, q });
+    }
+    $('#rsv').disabled = true;
+    const fail = e => { $('#rsv').disabled = false; err(/recipe|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-13.sql в Supabase' : e.message); };
+    for (const x of list) {
+      if (x.p) continue;
+      const { data, error } = await sb.from('products').insert({ household_id: S.household.id, name: x.pn, kind: x.kind }).select().single();
+      if (error) return fail(error);
+      x.p = data; S.products.push(data);
+    }
+    let rid = id;
+    if (r) {
+      const { error } = await sb.from('recipes').update({ name }).eq('id', id);
+      if (error) return fail(error);
+      const { error: e2 } = await sb.from('recipe_items').delete().eq('recipe_id', id);
+      if (e2) return fail(e2);
+    } else {
+      const { data, error } = await sb.from('recipes').insert({ household_id: S.household.id, name }).select().single();
+      if (error) return fail(error);
+      rid = data.id;
+    }
+    if (list.length) {
+      const { error } = await sb.from('recipe_items').insert(list.map(x => ({ recipe_id: rid, household_id: S.household.id, product_id: x.p.id, qty: x.q })));
+      if (error) return fail(error);
+    }
+    await refresh();
+    openRecipes();
+  };
+  if ($('#rdl')) $('#rdl').onclick = async () => {
+    if (!confirm('Удалить рецепт «' + r.name + '»? Он пропадёт и из меню.')) return;
+    const { error } = await sb.from('recipes').delete().eq('id', id);
+    if (error) return $('#err').textContent = error.message;
+    await refresh();
+    openRecipes();
+  };
+}
+
+function openMealAdd(iso) {
+  if (!S.recipes.length) return openRecipe(null);
+  sheet(`<b>Блюдо на ${esc(dayLabel(iso))}</b>
+    <div class="chips">${S.recipes.map(r => `<button data-pick="${r.id}">${esc(r.name)}${recipeLack(r.id).length ? '' : ' ✓'}</button>`).join('')}</div>
+    <div class="mute">✓ — всё есть дома.</div>
+    <div class="err" id="err"></div>
+    <button class="ghost full" id="rnew">+ Новый рецепт</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#rnew').onclick = () => openRecipe(null);
+  document.querySelectorAll('#sh [data-pick]').forEach(b => b.onclick = () => addMeal(iso, b.dataset.pick));
+}
+async function addMeal(iso, rid) {
+  const { error } = await sb.from('meal_plan').insert({ household_id: S.household.id, date: iso, recipe_id: rid });
+  if (error) return $('#err').textContent = error.message;
+  closeSheet(); refresh();
+}
+
+function openMeal(mid) {
+  const m = S.meals.find(x => x.id === mid), r = m && recipeOf(m.recipe_id);
+  if (!r) return;
+  const items = recipeItemsOf(r.id);
+  sheet(`<b>${esc(r.name)}</b>
+    <div class="mute">${esc(dayLabel(m.date))}${m.cooked ? ' · приготовлено' : ''}</div>
+    <div class="card">${items.map(it => { const p = prod(it.product_id); if (!p) return ''; const have = haveQty(p.id);
+      return `<div class="row"><span>${esc(p.name)}</span><span class="mute ${!m.cooked && have < +it.qty ? 'txt-warn' : ''}">${fmtQty(+it.qty, p.kind)} · дома ${fmtQty(have, p.kind)}</span></div>`; }).join('') || '<div class="mute">В рецепте нет продуктов.</div>'}</div>
+    <div class="err" id="err"></div>
+    ${m.cooked ? '' : '<button class="full" id="mck">Приготовили: списать из запасов</button>'}
+    <button class="ghost full" id="mrc">Открыть рецепт</button>
+    <button class="ghost full" id="mdl" style="color:var(--bad)">Убрать из меню</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#mrc').onclick = () => openRecipe(r.id);
+  $('#mdl').onclick = async () => {
+    const { error } = await sb.from('meal_plan').delete().eq('id', mid);
+    if (error) return $('#err').textContent = error.message;
+    closeSheet(); refresh();
+  };
+  if ($('#mck')) $('#mck').onclick = () => cookMeal(mid);
+}
+
+// приготовили: списываем продукты из запасов, сначала партии с ближайшим сроком годности
+async function cookMeal(mid) {
+  const m = S.meals.find(x => x.id === mid);
+  if (!m) return;
+  $('#mck').disabled = true;
+  const notEnough = [];
+  for (const it of recipeItemsOf(m.recipe_id)) {
+    let rest = +it.qty;
+    const batches = S.pantry.filter(b => b.product_id === it.product_id && isFresh(b))
+      .sort((a, b) => (a.expires_on || '9999').localeCompare(b.expires_on || '9999'));
+    for (const b of batches) {
+      if (rest <= 0) break;
+      const take = Math.min(rest, +b.qty);
+      const { error } = take >= +b.qty ? await sb.from('pantry_items').delete().eq('id', b.id)
+        : await sb.from('pantry_items').update({ qty: Math.round((+b.qty - take) * 1000) / 1000 }).eq('id', b.id);
+      if (error) { $('#mck').disabled = false; return $('#err').textContent = error.message; }
+      rest -= take;
+    }
+    const p = prod(it.product_id);
+    if (rest > 0 && p) notEnough.push(p.name + ' ' + fmtQty(rest, p.kind));
+  }
+  const { error } = await sb.from('meal_plan').update({ cooked: true }).eq('id', mid);
+  if (error) { $('#mck').disabled = false; return $('#err').textContent = error.message; }
+  sound('success');
+  closeSheet(); refresh();
+  toast(notEnough.length ? 'Списано. Дома не хватило: ' + notEnough.join(', ') : 'Приготовлено, продукты списаны', notEnough.length ? 6000 : 2600);
+}
+
 
 // ----- сканер штрихкода -----
 let scanReader = null;
@@ -2487,7 +2720,17 @@ function taskMeta(t) {
   if (t.due) parts.push(t.due < td && !t.done ? 'просрочено, ' + dayLabel(t.due) : t.due === td ? 'сегодня' : t.due === addDays(td, 1) ? 'завтра' : dayLabel(t.due));
   if (t.due_time) parts.push(t.due_time.slice(0, 5));
   parts.push(t.assignee ? nameOf(t.assignee) : 'общее');
+  if (t.repeat) parts.push('↻ ' + REPEAT[t.repeat].toLowerCase());
   return parts.join(' · ');
+}
+const REPEAT = { day: 'Каждый день', week: 'Каждую неделю', month: 'Каждый месяц' };
+// следующая дата повтора; 31-е в коротком месяце становится последним днём месяца
+function nextDue(iso, repeat) {
+  if (repeat === 'day') return addDays(iso, 1);
+  if (repeat === 'week') return addDays(iso, 7);
+  const [y, m, d] = iso.split('-').map(Number);
+  const last = new Date(y, m + 1, 0).getDate();
+  return `${m === 12 ? y + 1 : y}-${pad(m === 12 ? 1 : m + 1)}-${pad(Math.min(d, last))}`;
 }
 function taskRow(t) {
   const late = !t.done && t.due && t.due < today();
@@ -2533,24 +2776,27 @@ function renderCal() {
 function openTask(id, pre = {}) {
   const t = id ? S.tasks.find(x => x.id === id) : null;
   if (id && !t) return;
-  const v = t || { title: '', due: pre.due || '', due_time: '', assignee: null };
+  const v = t || { title: '', due: pre.due || '', due_time: '', assignee: null, repeat: null };
   sheet(`<b>${t ? 'Дело' : 'Новое дело'}</b>
     <input id="tt" value="${esc(v.title)}" placeholder="Что сделать, например: записать кота к врачу" maxlength="300">
     <div class="row" style="gap:8px"><input id="tdt" type="date" value="${esc(v.due || '')}" style="flex:1"><input id="ttm" type="time" value="${esc((v.due_time || '').slice(0, 5))}" style="width:116px"></div>
     <div class="mute">Дату и время можно не указывать.</div>
     <select id="tas"><option value="">Общее</option>${S.members.map(m => `<option value="${m.user_id}"${m.user_id === v.assignee ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+    <select id="trp"><option value="">Не повторять</option>${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${l}</option>`).join('')}</select>
     <div class="err" id="err"></div>
     <button class="full" id="tsv">Сохранить</button>
     ${t ? `<button class="ghost full" id="tdn">${t.done ? 'Вернуть в работу' : 'Сделано'}</button><button class="ghost full" id="tdl" style="color:var(--bad)">Удалить</button>` : ''}
     <button class="link full" id="cl">Отмена</button>`);
   if (!t && $('#tt').focus) $('#tt').focus();
   $('#cl').onclick = closeSheet;
-  const sqlHint = e => /tasks|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-12.sql в Supabase' : e.message;
+  const sqlHint = e => /repeat/i.test(e.message) ? 'Для повтора выполните update-13.sql в Supabase'
+    : /tasks|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-12.sql в Supabase' : e.message;
   $('#tsv').onclick = async () => {
-    const title = $('#tt').value.trim(), due = $('#tdt').value || null, time = $('#ttm').value || null;
+    const title = $('#tt').value.trim(), due = $('#tdt').value || null, time = $('#ttm').value || null, repeat = $('#trp').value || null;
     if (!title) return $('#err').textContent = 'Напишите, что сделать';
     if (time && !due) return $('#err').textContent = 'Для времени укажите и дату';
     const row = { title, due, due_time: time, assignee: $('#tas').value || null };
+    if (repeat || (t && t.repeat)) row.repeat = repeat;     // поле только если повтор задан: до update-13.sql колонки нет
     $('#tsv').disabled = true;
     const { data, error } = t ? await sb.from('tasks').update(row).eq('id', id).select()
       : await sb.from('tasks').insert({ household_id: S.household.id, ...row }).select();
@@ -2579,8 +2825,102 @@ async function toggleTask(id) {
   const { data, error } = await sb.from('tasks').update({ done: t.done, done_at: t.done_at }).eq('id', id).select();
   if (error || !data || !data.length) {
     Object.assign(t, was); render();
-    toast('Не удалось сохранить: ' + (error ? error.message : 'нет связи'), 4000);
+    return toast('Не удалось сохранить: ' + (error ? error.message : 'нет связи'), 4000);
   }
+  // повторяющееся дело: сразу создаём следующее, если его ещё нет (повторная отметка не плодит копии)
+  if (t.done && t.repeat) {
+    const due = nextDue(t.due || today(), t.repeat);
+    if (!S.tasks.some(x => !x.done && x.title === t.title && x.repeat === t.repeat && x.due === due)) {
+      const next = { household_id: S.household.id, title: t.title, due, due_time: t.due_time || null, assignee: t.assignee || null, repeat: t.repeat };
+      const { error: e2 } = await sb.from('tasks').insert(next);
+      if (e2) return toast('Следующее дело не создалось: ' + e2.message, 5000);
+      toast('Следующее: ' + dayLabel(due));
+    }
+    refresh();
+  }
+}
+
+
+// ---------- push-уведомления ----------
+// Открытый ключ VAPID (публичный по задумке); закрытый хранится только в настройках функции Supabase.
+const VAPID_PUBLIC = 'BASoEomq14ksbLLYUwZzoYW6kllJlpPEPvUhWqUzb3ZwusgT3QtAr8AyvT8x_Mfi7gmY8neV9t8FtYB7IlsQNYQ';
+const PUSH_FN = 'push-digest';
+const pushSupported = () => typeof navigator.serviceWorker === 'object' && typeof window.PushManager === 'function' && typeof window.Notification === 'function';
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+const standalone = () => !!((window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone);
+const b64u = s => Uint8Array.from(atob((s + '==='.slice((s.length + 3) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+
+// состояние на этом телефоне: unsupported, home (iPhone без значка на экране «Домой»), denied, on, off
+async function pushState() {
+  if (!pushSupported()) return isIOS() && !standalone() ? 'home' : 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return sub && Notification.permission === 'granted' ? 'on' : 'off';
+  } catch (e) { return 'off'; }
+}
+
+async function hydratePush() {
+  const box = $('#pushbox');
+  if (!box) return;
+  const st = await pushState();
+  if (!$('#pushbox')) return;
+  const msg = {
+    unsupported: 'Этот браузер не умеет получать уведомления.',
+    home: 'На iPhone уведомления работают, только если приложение добавлено на экран «Домой» (Поделиться → На экран «Домой») и открыто оттуда. Нужна iOS 16.4 или новее.',
+    denied: 'Уведомления запрещены в настройках телефона. Разрешите их для этого приложения и откройте его снова.',
+    on: 'Включены на этом телефоне.',
+    off: 'Выключены на этом телефоне.'
+  }[st];
+  $('#pushbox').innerHTML = `<div class="mute" style="margin-top:8px">${msg}</div>
+    ${st === 'off' ? '<button class="full" id="pon">Включить на этом телефоне</button>' : ''}
+    ${st === 'on' ? '<button class="ghost full" id="ptest">Прислать проверочное</button><button class="link full" id="poff">Выключить</button>' : ''}
+    <div class="mute" id="pmsg"></div>`;
+  if ($('#pon')) $('#pon').onclick = enablePush;
+  if ($('#ptest')) $('#ptest').onclick = testPush;
+  if ($('#poff')) $('#poff').onclick = disablePush;
+}
+const pushMsg = t => { const m = $('#pmsg'); if (m) m.textContent = t; };
+
+async function enablePush() {
+  try {
+    if (await Notification.requestPermission() !== 'granted') { pushMsg('Без разрешения уведомления не придут.'); return hydratePush(); }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription()
+      || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+    const j = sub.toJSON();
+    const { error } = await sb.from('push_subscriptions')
+      .upsert({ household_id: S.household.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
+    if (error) {
+      await sub.unsubscribe().catch(() => {});
+      return pushMsg(/push_subscriptions|relation|schema cache/i.test(error.message) ? 'Сначала выполните update-13.sql в Supabase' : error.message);
+    }
+    sound('success');
+    await hydratePush();
+    pushMsg('Готово. Нажмите «Прислать проверочное», чтобы убедиться, что всё работает.');
+  } catch (e) { pushMsg('Не получилось включить: ' + (e.message || e)); }
+}
+
+async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    }
+  } catch (e) {}
+  hydratePush();
+}
+
+async function testPush() {
+  pushMsg('Отправляем…');
+  try {
+    const { data, error } = await sb.functions.invoke(PUSH_FN, { body: { test: true } });
+    if (error) return pushMsg('Сервер уведомлений не ответил. Проверьте, что функция push-digest установлена по инструкции. (' + error.message + ')');
+    pushMsg(data && data.sent ? 'Отправлено. Уведомление должно прийти в течение минуты.' : 'Сервер ответил, но отправлять было некуда: ' + ((data && data.note) || 'нет подписок'));
+  } catch (e) { pushMsg('Не получилось: ' + (e.message || e)); }
 }
 
 
@@ -2696,7 +3036,7 @@ function sound(name) {
   } catch (e) {}
 }
 
-const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap],.task';
+const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap],.task,.meal,[data-rcp]';
 function soundFor(el) {
   if (el.matches('.seg button,.monthbar button,.mcol')) return 'tab';
   if (el.matches('.tile,#bk')) return 'nav';
