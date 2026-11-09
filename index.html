@@ -157,7 +157,7 @@ button.mcol{overflow:visible}
 .rip{position:absolute;border-radius:50%;background:rgba(255,255,255,.3);transform:scale(0);animation:rip .5s ease-out forwards;pointer-events:none}
 @keyframes rip{to{transform:scale(1);opacity:0}}
 .tx,.pi,.cat{transition:background-color .15s,transform .15s}
-.tx:active,.pi[data-p]:active,.pi[data-s]:active,.pi[data-ib]:active,.pi[data-r]:active,.recur:active,.cat[data-c]:active,.goal:active{background:rgba(167,139,250,.12);transform:scale(.985)}
+.tx:active,.pi[data-p]:active,.pi[data-s]:active,.pi[data-ib]:active,.pi[data-r]:active,.recur:active,.cat[data-c]:active,.goal:active,.pi[data-gap]:active{background:rgba(167,139,250,.12);transform:scale(.985)}
 .enter-fwd{animation:pagefwd .26s cubic-bezier(.2,.8,.2,1)}
 .enter-back{animation:pageback .26s cubic-bezier(.2,.8,.2,1)}
 .enter-sub>*:not(.top):not(.monthbar):not(.seg){animation:pagesub .24s cubic-bezier(.2,.8,.2,1)}
@@ -232,7 +232,7 @@ h1,.top b,.monthbar b,.day{text-shadow:0 1px 8px rgba(8,2,24,.9)}
 </div>
 <div id="app"></div>
 <script src="supabase.js"></script>
-<script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>')</script>
+<script>window.supabase||document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"><\/script>')</script>
 <script>
 // ====== НАСТРОЙКА: вставьте данные вашего проекта Supabase ======
 const DIRECT_URL = 'https://ykyxcsuuflwavetdeodi.supabase.co';
@@ -257,7 +257,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             goals: [], deposits: [], goalsReady: false, limSub: 'cats',
             photos: [], photosReady: false, urls: {},
             rules: [], rulesReady: false, skipped: new Set(), offline: false,
-            recur: [], recurReady: false, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -305,6 +305,7 @@ function saveSnap() {
 }
 function applySnap(o) {
   SNAP_KEYS.forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
+  S.txMonth = o.month;
   if (o.month !== S.month.getTime()) S.tx = [];
   S.me = (S.members || []).find(m => m.user_id === S.user.id) || null;
 }
@@ -316,29 +317,61 @@ function mergePending(list) {
     .map(q => ({ ...q, user_id: S.user.id, created_at: new Date().toISOString(), _pending: true }));
   return extra.length ? [...extra, ...list].sort((x, y) => y.date.localeCompare(x.date)) : list;
 }
+// операции, которые сервер не принял: не теряем, а показываем в «Не отправлено»
+const failedQ = () => lsGet('fb_qfail') || [];
 // отправить накопленные операции; true, если очередь пуста
 async function flushQueue() {
   let q = queue();
   while (q.length) {
     const { _msg, ...row } = q[0];
-    const { error } = await sb.from('transactions').insert(row);
+    let { error } = await sb.from('transactions').insert(row);
+    if (error && error.code === '23503' && row.category_id) {     // категорию успели удалить: отправляем без неё
+      ({ error } = await sb.from('transactions').insert({ ...row, category_id: null }));
+    }
     if (error && isNetErr(error)) return false;
-    if (error && error.code !== '23505') toast('Операция на ' + fmt(+row.amount) + ' не принята: ' + error.message, 6000);
+    if (error && /jwt|PGRST30/i.test((error.code || '') + ' ' + error.message)) return false;   // вход устарел: отправим после его обновления
+    if (error && error.code !== '23505') {
+      lsSet('fb_qfail', [...failedQ(), { ...row, _msg: error.message }]);
+      toast('Операция на ' + fmt(+row.amount) + ' не принята сервером. Она сохранена в «Не отправлено».', 6000);
+    }
     q = q.slice(1); lsSet('fb_q', q);
   }
   return true;
 }
 function offlineBar() {
-  const n = queue().length;
-  if (!S.offline && !n) return '';
-  return `<div class="offbar">${S.offline ? 'Нет связи, показаны сохранённые данные.' : 'Отправляем сохранённые операции.'}${n ? ' Ждут отправки: ' + n + '.' : ''}
-    <button class="link" id="retry" style="padding:0 0 0 6px">Повторить</button></div>`;
+  const n = queue().length, f = failedQ().length;
+  const noMonth = S.offline && S.txMonth !== S.month.getTime();
+  if (!S.offline && !n && !f) return '';
+  return `<div class="offbar">${S.offline ? 'Нет связи, показаны сохранённые данные.' + (noMonth ? ' За этот месяц сохранённых операций нет.' : '') : n ? 'Отправляем сохранённые операции.' : ''}${n ? ' Ждут отправки: ' + n + '.' : ''}${f ? ' Не отправлено: ' + f + '.' : ''}
+    ${S.offline || n ? '<button class="link" id="retry" style="padding:0 0 0 6px">Повторить</button>' : ''}${f ? '<button class="link" id="qfail" style="padding:0 0 0 6px">Разобрать</button>' : ''}</div>`;
+}
+function openFailed() {
+  const list = failedQ();
+  if (!list.length) return closeSheet();
+  sheet(`<b>Не отправлено</b>
+    <p class="mute">Сервер не принял эти операции. Их можно отправить ещё раз или удалить.</p>
+    ${list.map((r, i) => `<div class="pi" style="cursor:default"><div style="min-width:0"><div>${r.kind === 'income' ? '+' : '−'}${fmt(+r.amount)} · ${esc(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</div>
+      <div class="mute" style="overflow-wrap:anywhere">${esc(r._msg || '')}</div></div><button class="link" data-fd="${i}">Удалить</button></div>`).join('')}
+    <button class="full" id="fr">Отправить ещё раз</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#fr').onclick = async () => {
+    lsSet('fb_q', [...queue(), ...failedQ()]); lsSet('fb_qfail', []);
+    closeSheet(); await refresh();
+    if (failedQ().length) openFailed();
+  };
+  document.querySelectorAll('#sh [data-fd]').forEach(b => b.onclick = () => {
+    if (!confirm('Удалить эту операцию? Она не попадёт в бюджет.')) return;
+    lsSet('fb_qfail', failedQ().filter((_, i) => i !== +b.dataset.fd));
+    render(); openFailed();
+  });
 }
 
 async function refresh(opts = {}) {
   if (queue().length) await flushQueue();
   const [from, to] = monthRange();
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp] = await Promise.all([
+  const since = new Date(Date.now() - 62 * 864e5).toISOString();   // для сверки с банком: уведомления за два месяца
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -356,13 +389,15 @@ async function refresh(opts = {}) {
     sb.from('goal_deposits').select('*').order('created_at', { ascending: false }),
     sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
     sb.from('category_rules').select('*').order('keyword'),
-    sb.from('recurring_payments').select('*').order('day')
+    sb.from('recurring_payments').select('*').order('day'),
+    sb.from('bank_inbox').select('*').gte('received_at', since).order('received_at').limit(1000)
   ]);
   if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
     // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
     const wasOffline = S.offline;
     S.offline = true;
     if (!S.cats.length && !S.tx.length) { const snap = lsGet('fb_snap'); if (snap && snap.uid === S.user.id) applySnap(snap); }
+    if (S.txMonth !== S.month.getTime()) S.tx = [];      // операций этого месяца на телефоне нет: не показываем чужой месяц
     S.tx = mergePending(S.tx.filter(x => !x._pending));
     if (!wasOffline || !opts.poll) render();
     startPolling();
@@ -375,11 +410,13 @@ async function refresh(opts = {}) {
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
   const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
-    gl.data, gd.data, ph.data, ru.data, rp.data, S.month.getTime(), queue().length, wasOff]);
+    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
   if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
   S._sig = sig;
   S.dataVer++;
-  S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data;
+  S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data; S.txMonth = S.month.getTime();
+  S.bankReady = !bk.error;
+  S.bank = (S.bankReady && bk.data) || [];
   S.foodReady = !(pr.error || pa.error || sp.error || sr.error || pc.error);
   S.products = S.foodReady ? pr.data : [];
   S.pantry = S.foodReady ? pa.data : [];
@@ -595,6 +632,7 @@ function render() {
   if ($('#add')) $('#add').onclick = () => S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (S.foodReady ? (S.sub === 'stock' ? openAddStock() : openAddStaple()) : null) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
+  if ($('#qfail')) $('#qfail').onclick = openFailed;
   if (S.tab === 'home') countUp();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
@@ -654,6 +692,7 @@ function renderHome() {
     : '<div class="mute" style="grid-column:1/-1">Перенос остатка включится после выполнения update-4.sql</div>'}
   ${savedMonth() ? `<div class="mute" style="grid-column:1/-1">Отложено на цели в этом месяце: <b>${fmt(savedMonth())}</b></div>` : ''}</div>
   ${renderPace(inc, exp)}
+  ${renderGapCard()}
   <div class="grid">
     <button class="tile t1" data-t="tx">${ICONS.tx}<div><b>Операции</b><span>Записей: ${S.tx.length}</span></div></button>
     <button class="tile t2" data-t="lim">${ICONS.lim}<div><b>Лимиты</b><span>Задано: ${limits}</span></div></button>
@@ -754,6 +793,7 @@ function bindTab() {
   $('#app').querySelectorAll('.goal').forEach(el => el.onclick = () => openGoal(el.dataset.g));
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
   $('#app').querySelectorAll('.recur').forEach(el => el.onclick = () => openRecur(el.dataset.r));
+  $('#app').querySelectorAll('[data-gap]').forEach(el => el.onclick = () => openGap(el.dataset.gap));
   if ($('#arc')) $('#arc').onclick = () => openRecurForm(null);
   $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); S._enter = 'sub'; refresh(); });
   if ($('#excsv')) $('#excsv').onclick = exportCsv;
@@ -794,15 +834,16 @@ const closeSheet = () => {
   setTimeout(() => s.remove(), 180);
 };
 
-function openAdd() {
-  let kind = 'expense', shared = true;
+// pre: заполнить заранее (kind, amount, date, note) и onSaved — что сделать после сохранения
+function openAdd(pre = {}) {
+  let kind = pre.kind || 'expense', shared = true;
   const catOpts = k => S.cats.filter(c => c.kind === k).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')
     + '<option value="">Без категории</option><option value="__new">+ Новая категория…</option>';
-  sheet(`<div class="seg" id="kd"><button data-k="expense" class="on">Расход</button><button data-k="income">Доход</button></div>
-    <input id="am" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Сумма, ₽" style="font-size:24px">
-    <select id="ct">${catOpts('expense')}</select>
-    <input id="nt" placeholder="Заметка (необязательно)">
-    <input id="dt" type="date" value="${today()}">
+  sheet(`${pre.title ? `<b>${esc(pre.title)}</b>` : ''}<div class="seg" id="kd"><button data-k="expense" class="${kind === 'expense' ? 'on' : ''}">Расход</button><button data-k="income" class="${kind === 'income' ? 'on' : ''}">Доход</button></div>
+    <input id="am" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Сумма, ₽" style="font-size:24px" value="${pre.amount || ''}">
+    <select id="ct">${catOpts(kind)}</select>
+    <input id="nt" placeholder="Заметка (необязательно)" value="${esc(pre.note || '')}">
+    <input id="dt" type="date" value="${esc(pre.date || today())}">
     <div class="seg" id="sc"><button data-s="1" class="on">Общий</button><button data-s="0">Личный</button></div>
     <div class="err" id="err"></div>
     <button class="full" id="sv">Сохранить</button>`);
@@ -843,6 +884,7 @@ function openAdd() {
       return toast('Нет связи. Операция сохранена на телефоне и отправится сама.', 4500);
     }
     if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
+    if (pre.onSaved) await pre.onSaved();
     closeSheet(); refresh();
   };
 }
@@ -866,9 +908,29 @@ function openTx(id) {
     ${own && t.note && S.rulesReady ? `<div class="mute" style="margin-top:8px">Запомнить для похожих операций: если в тексте есть</div>
       <input id="rk" value="${esc(guessKeyword(t.note))}" placeholder="Например: пятёрочка">
       <button class="ghost full" id="rkb">Запомнить правило</button><div class="mute" id="rkm"></div>` : ''}
-    ${own ? '<button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>' : '<div class="mute">Удалять может автор записи или создатель семьи.</div>'}
+    ${own ? `<div class="mute" style="margin-top:8px">Сумма, описание и дата</div>
+      <input id="ea" type="number" inputmode="decimal" min="0" step="0.01" value="${+t.amount}" placeholder="Сумма, ₽">
+      <input id="en" value="${esc(t.note || '')}" placeholder="Описание">
+      <input id="edt" type="date" value="${esc(t.date)}">
+      <label class="chk"><input type="checkbox" id="esh"${t.shared ? ' checked' : ''}><span>Общая операция</span></label>
+      <div class="err" id="eerr"></div>
+      <button class="ghost full" id="esv">Сохранить изменения</button>` : ''}
+    ${own ? '<button class="full" id="dl" style="background:var(--bad);color:#fff">Удалить</button>' : '<div class="mute">Менять и удалять может автор записи или создатель семьи.</div>'}
     <button class="ghost full" id="cl">Закрыть</button>`);
   $('#cl').onclick = closeSheet;
+  if ($('#esv')) $('#esv').onclick = async () => {
+    const amount = parseNum($('#ea').value), date = $('#edt').value;
+    if (!(amount > 0)) return $('#eerr').textContent = 'Введите сумму';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return $('#eerr').textContent = 'Укажите дату';
+    $('#esv').disabled = true;
+    const { data, error } = await sb.from('transactions')
+      .update({ amount, note: $('#en').value.trim() || null, date, shared: $('#esh').checked }).eq('id', id).select();
+    $('#esv').disabled = false;
+    if (error) return $('#eerr').textContent = error.message;
+    if (!data || !data.length) return $('#eerr').textContent = 'Не удалось сохранить: нет прав на эту операцию.';
+    closeSheet(); refresh();
+    toast('Изменения сохранены');
+  };
   if ($('#ec')) $('#ec').onchange = async () => {
     const { data, error } = await sb.from('transactions').update({ category_id: $('#ec').value || null }).eq('id', id).select();
     if (error) return alert(error.message);
@@ -1384,7 +1446,7 @@ function renderAuto() {
        <button class="ghost full" id="tkshow">Токен и настройки</button>`
     : `<p class="mute">Операции из уведомлений банка будут появляться сами. Нужна разовая настройка команды на iPhone.</p>
        <button class="full" id="tkon">Включить автоимпорт</button>`;
-  return `<div class="card"><b>Входящие из банка</b>${inbox}</div>
+  return `<div class="card"><b>Входящие из банка</b>${inbox}${bankSummary()}</div>
     <div class="card"><b>Автоимпорт из банка</b>${auto}</div>`;
 }
 
@@ -1940,7 +2002,8 @@ async function saveRule(keyword, catId) {
     { onConflict: 'household_id,keyword' });
   if (r.error) throw r.error;
   r = await sb.from('transactions').update({ category_id: catId }).is('category_id', null).eq('kind', cat.kind)
-    .ilike('note', '%' + kw.replace(/[\\%_]/g, m => '\\' + m) + '%').select('id');
+    // «е» и «ё» в шаблоне заменяются на «_» (любой символ): правило «пятёрочка» найдёт и «Пятерочка»
+    .ilike('note', '%' + kw.replace(/[\\%_]/g, m => '\\' + m).replace(/[её]/g, '_') + '%').select('id');
   if (r.error) throw r.error;
   return r.data ? r.data.length : 0;
 }
@@ -2288,6 +2351,81 @@ async function exportJson() {
 }
 
 
+// ---------- сверка с банком ----------
+// В уведомлении банка есть остаток после операции. Между двумя соседними уведомлениями остаток должен
+// измениться ровно на сумму второй операции. Если не сходится, какое-то уведомление не дошло.
+function parseBalance(text) {
+  // число: «12345» или разряды по три цифры «12 345», чтобы номер карты «*1234 5 000 ₽» не слился с суммой
+  const m = String(text || '').match(/(?:доступно|остаток|баланс)[^\d−-]{0,25}([−-])?\s*((?:\d{1,3}(?:[   ]\d{3})+|\d+)(?:[.,]\d{1,2})?)\s*(?:₽|руб|р\.)/i);
+  if (!m) return null;
+  const v = parseFloat(m[2].replace(/[\s  ]/g, '').replace(',', '.'));
+  return isFinite(v) ? (m[1] ? -v : v) : null;
+}
+function bankChain() {
+  return S.bank.map(r => ({ r, bal: parseBalance(r.raw_text) })).filter(x => x.bal !== null);
+}
+function bankGaps() {
+  const rows = bankChain(), out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1], b = rows[i];
+    if (b.r.gap_ok || !b.r.parsed_kind || !(+b.r.parsed_amount > 0)) continue;   // разобрано или сумма неизвестна
+    const signed = (b.r.parsed_kind === 'income' ? 1 : -1) * +b.r.parsed_amount;
+    const diff = Math.round((b.bal - a.bal - signed) * 100) / 100;
+    if (Math.abs(diff) >= 1) out.push({ id: b.r.id, from: a.r.received_at, to: b.r.received_at, diff, before: a.bal, after: b.bal });
+  }
+  return out.reverse();                                   // сначала свежие
+}
+const gapText = g => (g.diff > 0 ? 'Не хватает дохода ' : 'Не хватает расхода ') + fmt(Math.abs(g.diff));
+
+function renderGapCard() {
+  if (!S.bankReady) return '';
+  const gaps = bankGaps();
+  if (!gaps.length) return '';
+  return `<div class="card"><b>Сверка с банком</b>
+    <div class="mute">Остаток в банке изменился не так, как операции в приложении. Похоже, уведомление не дошло.</div>
+    ${gaps.slice(0, 3).map(g => `<div class="pi" data-gap="${g.id}"><div><div class="txt-warn">${gapText(g)}</div>
+      <div class="mute">между ${esc(fmtWhen(g.from))} и ${esc(fmtWhen(g.to))}</div></div><div class="mute">›</div></div>`).join('')}
+    ${gaps.length > 3 ? `<div class="mute">И ещё расхождений: ${gaps.length - 3}</div>` : ''}</div>`;
+}
+
+function bankSummary() {
+  if (!S.bankReady) return '';
+  const rows = bankChain();
+  if (!rows.length) return '<div class="mute" style="margin-top:8px">Сверка с банком: в уведомлениях пока нет остатка по счёту.</div>';
+  const last = rows[rows.length - 1], n = bankGaps().length;
+  return `<div class="mute" style="margin-top:8px">Сверка с банком: остаток ${fmt(last.bal)} на ${esc(fmtWhen(last.r.received_at))}. ${n ? 'Расхождений: ' + n + ', они на главном экране.' : 'Всё сходится.'}</div>`;
+}
+
+async function markGap(id) {
+  const { data, error } = await sb.from('bank_inbox').update({ gap_ok: true }).eq('id', id).select('id');
+  if (error) throw new Error(/gap_ok|column|schema cache/i.test(error.message) ? 'Сначала выполните update-10.sql в Supabase' : error.message);
+  if (!data || !data.length) throw new Error('Не удалось сохранить отметку');
+}
+
+function openGap(id) {
+  const g = bankGaps().find(x => x.id === id);
+  if (!g) return;
+  sheet(`<b>Сверка с банком</b>
+    <div class="big txt-warn">${gapText(g)}</div>
+    <p class="mute">Остаток был ${fmt(g.before)} (${esc(fmtWhen(g.from))}), стал ${fmt(g.after)} (${esc(fmtWhen(g.to))}).
+      Операции из уведомлений объясняют не всё: разница ${fmt(Math.abs(g.diff))}. Скорее всего, уведомление о ${g.diff > 0 ? 'поступлении' : 'списании'} не дошло.
+      Если пропущенных операций несколько, внесите их по одной.</p>
+    <div class="err" id="err"></div>
+    <button class="full" id="ga">Внести пропущенную операцию</button>
+    <button class="ghost full" id="gok">Это не пропуск, скрыть</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#gok').onclick = async () => {
+    try { await markGap(id); closeSheet(); refresh(); } catch (e) { $('#err').textContent = e.message; }
+  };
+  $('#ga').onclick = () => openAdd({
+    title: 'Пропущенная операция', kind: g.diff > 0 ? 'income' : 'expense', amount: Math.abs(g.diff),
+    date: new Date(g.to).toLocaleDateString('sv'), note: 'Внесено по сверке с банком',
+    onSaved: async () => { try { await markGap(id); } catch (e) { toast(e.message, 5000); } }
+  });
+}
+
+
 // ---------- звук и отклик на нажатия ----------
 // Звуки синтезируются на лету: без файлов и внешних серверов. Настройка своя на каждом телефоне.
 const soundOn = () => lsGet('fb_sound') !== false;
@@ -2325,7 +2463,7 @@ function sound(name) {
   } catch (e) {}
 }
 
-const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st]';
+const TAP_ROWS = '.tx,.pi[data-p],.pi[data-s],.pi[data-ib],.pi[data-r],.recur,.cat[data-c],.goal,.ph,[data-st],[data-gap]';
 function soundFor(el) {
   if (el.matches('.seg button,.monthbar button,.mcol')) return 'tab';
   if (el.matches('.tile,#bk')) return 'nav';
