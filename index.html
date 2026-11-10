@@ -195,10 +195,13 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .msg.fm a{color:inherit;text-decoration:underline}
 .msg.fm.pend{opacity:.6}
 .msg.ai.fm{background:rgba(40,26,76,.85)}
-.fbar{position:sticky;bottom:0;z-index:4;display:flex;gap:8px;align-items:flex-end;padding:12px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(rgba(18,11,36,0),var(--bg) 35%)}
+.fbar{position:sticky;bottom:0;z-index:4;display:flex;gap:8px;align-items:flex-end;padding:12px 0 calc(12px + env(safe-area-inset-bottom))}
+.fbar .cin{background:rgba(32,19,66,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 6px 20px rgba(8,2,24,.35)}
 .fbar>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
 .fbar>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.fpeople{position:sticky;top:0;z-index:4;display:flex;gap:8px;overflow-x:auto;padding:calc(6px + env(safe-area-inset-top)) 2px 10px;margin:0 -2px;scrollbar-width:none;background:linear-gradient(var(--bg) 75%,rgba(18,11,36,0))}
+.chathead{position:sticky;top:0;z-index:6;margin:0 -16px;padding:env(safe-area-inset-top) 16px 4px;background:rgba(18,11,36,.32);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);-webkit-mask-image:linear-gradient(#000 calc(100% - 10px),transparent);mask-image:linear-gradient(#000 calc(100% - 10px),transparent)}
+.chathead .top{margin-bottom:6px}
+.fpeople{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px;scrollbar-width:none}
 .fpeople::-webkit-scrollbar{display:none}
 .fpeople button{flex:none;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);font-size:14px;box-shadow:none}
 .fpeople button.on{background:var(--grad);border-color:transparent;color:#fff}
@@ -457,7 +460,7 @@ async function load() {
   if (error) return fail(error);
   setPeople(ms || []);
   if (!S.me) return renderOnboarding();
-  if (isRel()) { await refresh(); if (!S.booted) { S.booted = true; subscribe(); } return; }
+  if (isRel()) { await refresh(); if (!S.booted) { S.booted = true; subscribe(); openFromLaunch(); } return; }
   const { data: h } = await sb.from('households').select('*').limit(1).single();
   S.household = h;
   await refresh();
@@ -876,7 +879,7 @@ function render() {
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
     else if (S.tab === 'settings') body += isRel() ? renderRelSettings() : renderSettings();
-    else if (S.tab === 'chat') body += renderFam();
+    else if (S.tab === 'chat') body = `<div class="chathead">${body}${S.msgsReady ? famPeople() : ''}</div>` + renderFam();
     else if (S.tab === 'todo') body += (S.todoSub === 'cal' ? monthBar() : '') + todoSeg() + (S.todoSub === 'cal' ? renderCal() : renderTodo());
     else body += renderMore();
   }
@@ -894,7 +897,7 @@ function render() {
   if (S.tab === 'chat') bindFam();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
-  if (S.tab === 'settings' && !isRel()) hydratePush();
+  if (S.tab === 'settings') hydratePush();
   if ($('#gear')) $('#gear').onclick = () => go('settings');
   if ($('#sumcard')) $('#sumcard').onclick = () => openSummary(ymAdd(ymNow(), -1));
   if ($('#sumopen')) $('#sumopen').onclick = () => openSummary(S.month.getFullYear() + '-' + pad(S.month.getMonth() + 1));
@@ -1128,7 +1131,7 @@ function renderMore() {
 function renderSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
   <div class="card"><b>Уведомления</b>
-    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты. И за час до дела, у которого указано время.</div>
+    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты. За час до дела, у которого указано время. И о новых сообщениях в чате семьи.</div>
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
@@ -3549,18 +3552,26 @@ try {
     navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open') openFromUrl(e.data.url); });
 } catch (e) {}
 // уведомление «Итоги месяца» открывает приложение со ссылкой ./?itogi=YYYY-MM
+function openChatFrom(c) {
+  S.chatWith = c && c !== 'all' && S.circle.some(m => m.user_id === c) ? c : null;
+  if (S.tab === 'chat') render(); else go('chat');
+}
 function openFromUrl(url) {
+  let sp = null;
+  try { sp = new URL(url, location.href).searchParams; } catch (e) {}
+  if (!sp) return;
+  if (sp.get('chat')) return openChatFrom(sp.get('chat'));
   if (isRel()) return;
-  let ym = null;
-  try { ym = new URL(url, location.href).searchParams.get('itogi'); } catch (e) {}
-  if (ym) openSummary(ym);
+  if (sp.get('itogi')) openSummary(sp.get('itogi'));
 }
 function openFromLaunch() {
   const s = location && typeof location.search === 'string' ? location.search : '';
+  const c = s.match(/[?&]chat=([\w-]+)/);
   const m = s.match(/[?&]itogi=(\d{4}-\d{2})/);
-  if (!m) return;
+  if (!m && !c) return;
   try { history.replaceState(history.state, '', location.pathname); } catch (e) {}
-  openSummary(m[1]);
+  if (c) return openChatFrom(c[1]);
+  if (!isRel()) openSummary(m[1]);
 }
 
 // ---------- чат семьи и родственники (update-19.sql) ----------
@@ -3665,7 +3676,7 @@ function famHtml() {
 function renderFam() {
   if (!S.msgsReady) return '<div class="card"><b>Чат семьи</b><p class="mute">Выполните файл update-19.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
   if (S.chatWith && !S.circle.some(m => m.user_id === S.chatWith)) S.chatWith = null;
-  return `${famPeople()}<div class="fchat" id="fchat">${famHtml()}</div>
+  return `<div class="fchat" id="fchat">${famHtml()}</div>
   <div class="fbar"><div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea></div>
     <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div>`;
 }
@@ -3744,6 +3755,9 @@ function renderRelHome() {
 function renderRelSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span>
     <div class="mute" style="margin-top:6px">В семье: ${esc(S.circle.map(m => m.name).join(', '))}</div></div>
+  <div class="card"><b>Уведомления</b>
+    <div class="mute">О новых сообщениях в чате семьи и личных сообщениях вам.</div>
+    <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне.</div></div>
   <div class="card"><b>Оформление</b> <span class="jpf mute" lang="ja">季節</span>
@@ -4173,7 +4187,7 @@ async function enablePush() {
       || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
     const j = sub.toJSON();
     const { error } = await sb.from('push_subscriptions')
-      .upsert({ household_id: S.household.id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
+      .upsert({ household_id: S.household ? S.household.id : S.me.household_id, endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
     if (error) {
       await sub.unsubscribe().catch(() => {});
       return pushMsg(/push_subscriptions|relation|schema cache/i.test(error.message) ? 'Сначала выполните update-13.sql в Supabase' : error.message);

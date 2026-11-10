@@ -3,6 +3,8 @@
 //  1) по расписанию (update-14.sql) с заголовком x-cron-secret: сводка всем включённым телефонам;
 //     с телом {"mode":"remind"} (update-16.sql, раз в 5 минут) — напоминания о делах за час;
 //     с телом {"mode":"month"} (update-17.sql, 1-го числа) — итоги прошедшего месяца;
+//     с телом {"mode":"chat","id":...} (update-21.sql, триггер на новое сообщение) — уведомление о сообщении в чате семьи;
+//  Родственникам (members.role = 'relative') уходят только уведомления о сообщениях.
 //  2) кнопкой «Прислать проверочное» в приложении (вход пользователя): только на его телефоны.
 // Нужные секреты функции (Edge Functions -> Secrets): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET.
 // Проверку JWT в настройках функции нужно выключить: функция проверяет вход сама.
@@ -101,6 +103,18 @@ function buildMonth(d) {
   else if ((d.cats || []).some(c => c.kind === 'expense' && +c.monthly_limit > 0)) lines.push('Все лимиты соблюдены 👍');
   return { title: 'Итоги ' + MONTH_GEN[mi], body: lines.join('\n'), tag: 'month-' + ym, url: './?itogi=' + ym };
 }
+// сообщение чата -> уведомление получателю. m: строка family_messages, from: имя автора
+function chatMsg(m, from) {
+  const text = String(m.body || '').replace(/\s+/g, ' ').trim();
+  return {
+    title: m.to_user ? from + ' · лично' : from + ' · чат семьи',
+    body: text.length > 180 ? text.slice(0, 177) + '…' : text,
+    tag: 'chat-' + (m.to_user ? m.user_id : 'all'),
+    url: './?chat=' + (m.to_user ? m.user_id : 'all')
+  };
+}
+// кому: личное — адресату, общее — всем в семье, кроме автора
+const chatTargets = (m, members) => m.to_user ? [m.to_user] : members.filter(x => x.household_id === m.household_id && x.user_id !== m.user_id).map(x => x.user_id);
 // --- digest:end ---
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -133,6 +147,42 @@ Deno.serve(async (req: Request) => {
   let body: any = {};
   try { body = await req.json(); } catch (_) { /* пустое тело — обычная сводка */ }
 
+  // родственники получают только уведомления о сообщениях: бюджет, дела и итоги — не для них
+  const { data: relRows } = await db.from('members').select('user_id').eq('role', 'relative');
+  const rel = new Set((relRows || []).map((x: any) => x.user_id));
+  const notRel = (list: any[]) => (list || []).filter((s: any) => !rel.has(s.user_id));
+  const push = async (s: any, msg: any, ttl: number) => {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(msg), { TTL: ttl });
+      return 1;
+    } catch (e: any) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) { await db.from('push_subscriptions').delete().eq('id', s.id); return -1; }
+      return 0;
+    }
+  };
+
+  // режим «сообщение в чате семьи» (триггер update-21.sql)
+  if (cron && body && body.mode === 'chat') {
+    const { data: m } = await db.from('family_messages').select('*').eq('id', body.id).maybeSingle();
+    if (!m) return json({ sent: 0, note: 'нет такого сообщения' });
+    const { data: members } = await db.from('members').select('user_id,household_id,name').eq('household_id', m.household_id);
+    const from = ((members || []).find((x: any) => x.user_id === m.user_id) || {}).name || 'Семья';
+    const to = chatTargets(m, members || []);
+    if (!to.length) return json({ sent: 0 });
+    const { data: subs } = await db.from('push_subscriptions').select('*').in('user_id', to);
+    let sent = 0, removed = 0;
+    for (const s of subs || []) { const r = await push(s, chatMsg(m, from), 24 * 3600); if (r > 0) sent++; if (r < 0) removed++; }
+    return json({ sent, removed });
+  }
+
+  // родственник нажал «Прислать проверочное»
+  if (onlyUser && rel.has(onlyUser)) {
+    const { data: subs } = await db.from('push_subscriptions').select('*').eq('user_id', onlyUser);
+    let sent = 0;
+    for (const s of subs || []) if (await push(s, { title: 'Семья', body: 'Проверка: уведомления о сообщениях работают.', tag: 'test', url: './' }, 3600) > 0) sent++;
+    return json({ sent });
+  }
+
   // режим «итоги месяца» (расписание update-17.sql, 1-го числа в 10:00 по Москве).
   // ym — какой месяц подвести (по умолчанию прошедший), dry — только показать текст, ничего не отправляя
   if (cron && body && body.mode === 'month') {
@@ -141,7 +191,7 @@ Deno.serve(async (req: Request) => {
     const { data: subs, error: se } = await db.from('push_subscriptions').select('*');
     if (se) return json({ error: se.message }, 500);
     const byHh = new Map<string, any[]>();
-    (subs || []).forEach((s: any) => byHh.set(s.household_id, [...(byHh.get(s.household_id) || []), s]));
+    notRel(subs).forEach((s: any) => byHh.set(s.household_id, [...(byHh.get(s.household_id) || []), s]));
     let sent = 0, removed = 0;
     const preview: any[] = [];
     for (const [hh, list] of byHh) {
@@ -180,7 +230,7 @@ Deno.serve(async (req: Request) => {
       let sq = db.from('push_subscriptions').select('*').eq('household_id', t.household_id);
       if (t.assignee) sq = sq.eq('user_id', t.assignee);      // своё дело — только себе, общее — всей семье
       const { data: list } = await sq;
-      for (const s of list || []) {
+      for (const s of notRel(list)) {
         try {
           await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             JSON.stringify({ ...msg, url: './' }), { TTL: 3600 });
@@ -198,11 +248,12 @@ Deno.serve(async (req: Request) => {
   const { data: subs, error: se } = await q;
   if (se) return json({ error: se.message }, 500);
   if (!subs || !subs.length) return json({ sent: 0, note: 'на этом аккаунте нет телефонов с включёнными уведомлениями' });
+  const own = notRel(subs);
 
   const today = new Date().toLocaleDateString('sv', { timeZone: 'Europe/Moscow' });
   const monthStart = today.slice(0, 8) + '01';
   const byHousehold = new Map<string, any[]>();
-  subs.forEach((s: any) => byHousehold.set(s.household_id, [...(byHousehold.get(s.household_id) || []), s]));
+  own.forEach((s: any) => byHousehold.set(s.household_id, [...(byHousehold.get(s.household_id) || []), s]));
 
   let sent = 0, removed = 0;
   for (const [hh, list] of byHousehold) {
