@@ -1135,13 +1135,29 @@ function openAdd(pre = {}) {
     <input id="nt" placeholder="Заметка (необязательно)" value="${esc(pre.note || '')}">
     <input id="dt" type="date" value="${esc(pre.date || today())}">
     <div class="seg" id="sc"><button data-s="1" class="on">Общий</button><button data-s="0">Личный</button></div>
-    <button class="ghost full" id="rcpick">🧾 Прикрепить чек</button>
+    <button class="ghost full" id="rcpick">🧾 Сфотографировать чек — заполню сам</button>
+    <div class="mute" id="rcinfo"></div>
     <div class="err" id="err"></div>
     <button class="full" id="sv">Сохранить</button>`);
   let rfile = null;          // снимок чека: загрузим сразу после сохранения операции
-  $('#rcpick').onclick = () => pickImage(f => { rfile = f; $('#rcpick').textContent = '🧾 Чек выбран ✓ · заменить'; });
+  $('#rcpick').onclick = () => pickImage(async f => {
+    rfile = f;
+    $('#rcpick').textContent = '🧾 Чек выбран ✓ · заменить';
+    $('#rcinfo').textContent = 'Читаю чек…';
+    const r = await readReceipt(f);
+    if (!$('#rcinfo')) return;                       // окно уже закрыли
+    if (!r || !r.ok) { $('#rcinfo').textContent = r && r.why ? r.why + ' Заполните вручную — чек всё равно прикрепится.' : 'Не получилось прочитать чек. Заполните вручную — чек всё равно прикрепится.'; return; }
+    // подставляем только то, что человек ещё не заполнил сам
+    if (!$('#am').value) $('#am').value = r.amount;
+    if (!$('#nt').value && r.store) $('#nt').value = r.store;
+    if (r.date && r.date <= today() && r.date >= ymAdd(ymNow(), -12) + '-01') $('#dt').value = r.date;
+    const c = kind === 'expense' && vfind(S.cats.filter(x => x.kind === 'expense'), r.category);
+    if (c && !$('#ct').dataset.touched) $('#ct').value = c.id;
+    $('#rcinfo').textContent = 'Заполнено по чеку: ' + fmt(r.amount) + (r.store ? ' · ' + r.store : '') + (r.date ? ' · ' + dayLabel(r.date) : '') + (c ? ' · ' + c.name : '') + '. Проверьте и сохраните.';
+  });
   $('#am').focus();
   $('#ct').onchange = async () => {
+    $('#ct').dataset.touched = '1';                  // выбрали сами: чек категорию не перебьёт
     if ($('#ct').value !== '__new') return;
     const name = prompt(kind === 'expense' ? 'Название новой категории расходов' : 'Название новой категории доходов');
     if (!name || !name.trim()) { $('#ct').innerHTML = catOpts(kind); return; }
@@ -1312,6 +1328,18 @@ function bindReceipt(t, own) {
     openTx(t.id); refresh();
   };
 }
+// прочитать чек через помощника (Gemini): { ok, amount, store, date, category, items } или { ok: false, why }
+async function readReceipt(file) {
+  try {
+    const img = await toJpeg(file, 1600, .85);
+    const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(img.blob); });
+    const { data, error } = await sb.functions.invoke(VOICE_FN, { body: { mode: 'receipt', image: b64, mime: 'image/jpeg',
+      ctx: { today: today(), 'Категории расходов': S.cats.filter(c => c.kind === 'expense').map(c => c.name) } } });
+    if (error) return { ok: false, why: (await voiceErr(error)).replace('Помощник не ответил. Попробуйте ещё раз.', 'Помощник не ответил.') };
+    return data && data.receipt ? data.receipt : { ok: false };
+  } catch (e) { return { ok: false }; }
+}
+
 // просмотр чека на весь экран (как фото); «Назад» на Android закрывает
 async function openReceipt(path) {
   closeViewer();

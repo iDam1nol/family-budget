@@ -2,6 +2,7 @@
 // Приложение присылает сообщение (запись голоса или текст), последние реплики разговора и сводку данных семьи.
 // Функция отдаёт это бесплатной модели Gemini и возвращает ответ и действия для приложения
 // (поиск Google — только если задан секрет GEMINI_SEARCH=1, на бесплатном тарифе его нет).
+// Режим {"mode":"receipt","image":base64} — прочитать фото чека: сумма, магазин, дата, категория.
 // Сами действия выполняет приложение от имени этого человека (обычные права RLS), функция в базу не пишет.
 // Нужный секрет функции (Edge Functions -> Secrets): GEMINI_API_KEY. Необязательный: GEMINI_MODEL.
 // Проверку JWT в настройках функции выключить: функция проверяет вход сама.
@@ -111,6 +112,46 @@ function historyContents(h) {
   return list;
 }
 
+// ---- распознавание чека по фото ----
+const RECEIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', description: 'true, если на фото кассовый чек и итог читается' },
+    amount: { type: 'number', description: 'Итоговая сумма к оплате в рублях' },
+    store: { type: 'string', description: 'Название магазина или заведения, коротко: «Пятёрочка», «Шоколадница»' },
+    date: { type: 'string', description: 'Дата покупки YYYY-MM-DD или пусто' },
+    category: { type: 'string', description: 'Одна категория расходов строго из списка или пусто' },
+    items: { type: 'array', items: { type: 'string' }, description: 'До 5 самых дорогих позиций, коротко' }
+  },
+  required: ['ok', 'amount', 'store', 'date', 'category', 'items']
+};
+function receiptPrompt(ctx) {
+  const c = ctx || {};
+  return [
+    'На фото кассовый чек (обычно российский). Прочитай его и верни JSON по схеме.',
+    '- amount — ИТОГ к оплате (строки «ИТОГ», «ИТОГО», «К ОПЛАТЕ», «Безналичными»), не сумма одной позиции и не НДС. Копейки — дробная часть.',
+    '- store — название магазина коротко, как его называют люди («Пятёрочка», а не «ООО Агроторг»).',
+    '- date — дата с чека в формате YYYY-MM-DD; если года нет или не видно — пусто.',
+    '- category — одна из «Категории расходов» ниже, которая лучше всего подходит, или пусто.',
+    '- items — до 5 самых дорогих позиций, коротко, без цен.',
+    '- Если это не чек или итог не разобрать — ok: false, amount: 0, остальное пусто.',
+    `Сегодня ${c.today || ''}.`,
+    'Категории расходов: ' + JSON.stringify(c['Категории расходов'] || [])
+  ].join('\n');
+}
+// ответ модели по чеку -> { ok, amount, store, date, category, items } с проверкой значений
+function parseReceipt(text) {
+  const s = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a < 0 || b < a) return null;
+  let o; try { o = JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+  const amount = Math.round(+o.amount * 100) / 100;
+  const good = !!o.ok && amount > 0 && amount < 10000000;
+  return { ok: good, amount: good ? amount : 0, store: String(o.store || '').trim().slice(0, 80),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(o.date || '') ? o.date : '', category: String(o.category || '').trim().slice(0, 80),
+    items: (Array.isArray(o.items) ? o.items : []).map(x => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 5) };
+}
+
 // источники из поиска Google (если модель искала)
 function sourcesOf(cand) {
   const ch = ((cand || {}).groundingMetadata || {}).groundingChunks || [];
@@ -147,6 +188,38 @@ Deno.serve(async (req: Request) => {
 
   let body: any;
   try { body = await req.json(); } catch (_) { return json({ error: 'bad_request' }, 400); }
+
+  // фото чека -> сумма, магазин, дата, категория (для автозаполнения новой операции)
+  if (body.mode === 'receipt') {
+    const image = typeof body.image === 'string' ? body.image : '';
+    if (!image) return json({ error: 'empty' }, 400);
+    if (image.length > 6_000_000) return json({ error: 'too_long' }, 413);
+    const reqBody = JSON.stringify({
+      systemInstruction: { parts: [{ text: receiptPrompt(body.ctx) }] },
+      contents: [{ role: 'user', parts: [{ text: 'Вот чек.' }, { inline_data: { mime_type: /^image\/(jpeg|png|webp|heic|heif)$/.test(body.mime || '') ? body.mime : 'image/jpeg', data: image } }] }],
+      generationConfig: { responseMimeType: 'application/json', responseJsonSchema: RECEIPT_SCHEMA }
+    });
+    let r: any = null;
+    const tried: string[] = [];
+    for (const m of [env('GEMINI_MODEL') || 'gemini-3.8-flash', ...FALLBACK_MODELS]) {
+      const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 40000);
+      try {
+        const x = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body: reqBody, signal: ac.signal });
+        r = { status: x.status, body: await x.text(), model: m };
+      } catch (e) { r = { status: 0, body: String(e), model: m }; } finally { clearTimeout(t); }
+      if (r.status === 200) break;
+      tried.push(m + ': ' + r.status);
+      if (r.status === 401 || r.status === 403) break;
+    }
+    if (r.status === 429) return json({ error: 'limit' }, 429);
+    if (r.status !== 200) return json({ error: 'ai', detail: r.status + ' ' + r.body.slice(0, 300), tried }, 502);
+    let rc: any = null;
+    try { const j = JSON.parse(r.body); rc = parseReceipt((((j.candidates || [])[0] || {}).content || {}).parts.filter((p: any) => !p.thought).map((p: any) => p.text || '').join('')); } catch (_) { /* ниже */ }
+    if (!rc) return json({ error: 'ai', detail: 'непонятный ответ модели', tried }, 502);
+    return json({ receipt: rc, model: r.model, ...(tried.length ? { tried } : {}) });
+  }
+
   const audio = typeof body.audio === 'string' ? body.audio : '';
   const text = typeof body.text === 'string' ? body.text.trim().slice(0, 2000) : '';
   if (!audio && !text) return json({ error: 'empty' }, 400);
