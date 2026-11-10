@@ -186,6 +186,19 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .t3{background:linear-gradient(145deg,#6366f1,#312e81)}
 .t4{background:linear-gradient(145deg,#ec4899,#6b21a8)}
 .t5{background:linear-gradient(135deg,#7c3aed,#c026d3 70%,#ec4899)}
+.t7{background:linear-gradient(135deg,#312e81,#6d28d9 60%,#c026d3)}
+.fchat{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;padding:4px 0 10px;min-height:calc(100vh - 190px);min-height:calc(100dvh - 190px)}
+.fday{align-self:center;font-size:12px;color:var(--mute);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:3px 10px;margin:8px 0 2px}
+.msg.fm{position:relative;padding-bottom:19px;min-width:84px;white-space:pre-wrap}
+.msg.fm .fwho{display:block;font-size:12.5px;font-weight:700;margin-bottom:2px;white-space:normal}
+.msg.fm .ft{position:absolute;right:12px;bottom:4px;font-size:10.5px;opacity:.65;white-space:nowrap}
+.msg.fm a{color:inherit;text-decoration:underline}
+.msg.fm.pend{opacity:.6}
+.msg.ai.fm{background:rgba(40,26,76,.85)}
+.fbar{position:sticky;bottom:0;z-index:4;display:flex;gap:8px;align-items:flex-end;padding:12px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(rgba(18,11,36,0),var(--bg) 35%)}
+.fbar>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
+.fbar>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.relrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0}
 .tile.wide{grid-column:1/-1;aspect-ratio:auto;min-height:118px;flex-direction:row;align-items:flex-end}
 .tile.wide svg{align-self:flex-start;width:52px;height:52px}
 .tile.wide>div{text-align:right}
@@ -403,7 +416,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -412,7 +425,16 @@ function monthRange() {
   return [a, `${ny}-${pad(nm)}-01`];
 }
 const monthLabel = () => S.month.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-const nameOf = id => (S.members.find(m => m.user_id === id) || {}).name || '—';
+const nameOf = id => ((S.circle && S.circle.length ? S.circle : S.members).find(m => m.user_id === id) || {}).name || '—';
+// родственник: видит только чат семьи, галерею и помощника (update-19.sql закрывает ему остальное и в базе)
+const isRel = () => !!(S.me && S.me.role === 'relative');
+const REL_TABS = ['home', 'chat', 'photos', 'settings'];
+// все, кто в семье (и родственники) -> S.circle; полноправные члены семьи -> S.members (фильтры, дела, «партнёр»)
+function setPeople(list) {
+  S.circle = list || [];
+  S.members = S.circle.filter(m => m.role !== 'relative');
+  S.me = S.circle.find(m => m.user_id === S.user.id) || null;
+}
 const partner = () => S.members.find(m => m.user_id !== S.user.id);
 
 // ---------- загрузка ----------
@@ -428,9 +450,9 @@ async function load() {
     return fail({ message: 'Нет связи с сервером. Откройте приложение, когда появится интернет: после первого входа оно будет работать и без сети.' });
   }
   if (error) return fail(error);
-  S.members = ms || [];
-  S.me = S.members.find(m => m.user_id === S.user.id);
+  setPeople(ms || []);
   if (!S.me) return renderOnboarding();
+  if (isRel()) { await refresh(); if (!S.booted) { S.booted = true; subscribe(); } return; }
   const { data: h } = await sb.from('households').select('*').limit(1).single();
   S.household = h;
   await refresh();
@@ -442,7 +464,7 @@ const isNetErr = e => !!e && /failed to fetch|networkerror|network request|load 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const SNAP_KEYS = ['cats', 'tx', 'members', 'household', 'products', 'pantry', 'staples', 'stores', 'prices', 'goals', 'deposits',
-  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady', 'recipes', 'recipeItems', 'meals', 'menuReady', 'shop', 'shopReady'];
+  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady', 'recipes', 'recipeItems', 'meals', 'menuReady', 'shop', 'shopReady', 'circle', 'msgs', 'msgsReady'];
 function saveSnap() {
   const o = { uid: S.user.id, at: Date.now(), month: S.month.getTime() };
   SNAP_KEYS.forEach(k => { o[k] = S[k]; });
@@ -453,7 +475,7 @@ function applySnap(o) {
   SNAP_KEYS.forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
   S.txMonth = o.month;
   if (o.month !== S.month.getTime()) S.tx = [];
-  S.me = (S.members || []).find(m => m.user_id === S.user.id) || null;
+  if (o.circle && o.circle.length) setPeople(o.circle); else S.me = (S.members || []).find(m => m.user_id === S.user.id) || null;
 }
 const queue = () => lsGet('fb_q') || [];
 function mergePending(list) {
@@ -514,10 +536,11 @@ function openFailed() {
 }
 
 async function refresh(opts = {}) {
+  if (isRel()) return refreshRel(opts);
   if (queue().length) await flushQueue();
   const [from, to] = monthRange();
   const since = new Date(Date.now() - 62 * 864e5).toISOString();   // для сверки с банком: уведомления за два месяца
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq, rc, ri, mp, si] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq, rc, ri, mp, si, fm] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -541,7 +564,8 @@ async function refresh(opts = {}) {
     sb.from('recipes').select('*').order('name'),
     sb.from('recipe_items').select('*'),
     sb.from('meal_plan').select('*').gte('date', addDays(today(), -21)).order('date'),
-    sb.from('shopping_items').select('*').order('created_at')
+    sb.from('shopping_items').select('*').order('created_at'),
+    sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300)
   ]);
   if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
     // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
@@ -561,11 +585,11 @@ async function refresh(opts = {}) {
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
   const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
-    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, rc.data, ri.data, mp.data, si.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
+    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, rc.data, ri.data, mp.data, si.data, fm.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
   if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
   S._sig = sig;
   S.dataVer++;
-  S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data; S.txMonth = S.month.getTime();
+  S.cats = c.data; S.tx = mergePending(t.data); setPeople(m.data); S.txMonth = S.month.getTime();
   S.shopReady = !si.error;
   S.shop = (S.shopReady && si.data) || [];
   S.menuReady = !(rc.error || ri.error || mp.error);
@@ -594,6 +618,7 @@ async function refresh(opts = {}) {
   S.autoReady = !(tk.error || ib.error);
   S.token = S.autoReady ? tk.data : null;
   S.inbox = S.autoReady ? ib.data : [];
+  setMsgs(fm);
   saveSnap();
   render();
 }
@@ -616,7 +641,8 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items'].forEach(tb => {
+  ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_messages' }, () => loadMsgs());
+  (isRel() ? ['photos'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -739,6 +765,28 @@ const ICONS = {
     <g fill="#ffc2e6"><circle cx="384" cy="16" r="8"/><circle cx="352" cy="20" r="8"/><circle cx="328" cy="24" r="8"/><circle cx="304" cy="38" r="8"/><circle cx="346" cy="44" r="7"/></g>
     <g fill="#fff"><circle cx="384" cy="16" r="2.800"/><circle cx="352" cy="20" r="2.800"/><circle cx="328" cy="24" r="2.800"/><circle cx="304" cy="38" r="2.800"/><circle cx="346" cy="44" r="2.500"/></g>
   </svg>`,
+  // два облачка сообщений и бумажный фонарик
+  chat: `<svg class="art" viewBox="0 0 400 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artCh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b2a9e"/><stop offset=".55" stop-color="#5b2bb8"/><stop offset="1" stop-color="#b03fb0"/></linearGradient></defs>
+    <rect width="400" height="130" fill="url(#artCh)"/>
+    <rect x="22" y="20" width="120" height="44" rx="22" fill="#fff"/><path d="M40 60l-8 18 24-14Z" fill="#fff"/>
+    <g fill="#8b5cf6"><circle cx="58" cy="42" r="5"/><circle cx="82" cy="42" r="5"/><circle cx="106" cy="42" r="5"/></g>
+    <rect x="120" y="62" width="104" height="40" rx="20" fill="#f9a8d4"/><path d="M206 98l10 16-26-12Z" fill="#f9a8d4"/>
+    <path d="M140 82h64" stroke="#831843" stroke-width="4" stroke-linecap="round" opacity=".5"/>
+    <g transform="translate(-56 0)"><path d="M330 0v14" stroke="#2a0d4f" stroke-width="3"/><rect x="314" y="12" width="32" height="6" rx="2" fill="#2a0d4f"/>
+    <ellipse cx="330" cy="42" rx="24" ry="26" fill="#ff7a59"/><path d="M308 34h44M306 44h48M308 54h44" stroke="#c2410c" stroke-width="2" opacity=".6"/>
+    <rect x="314" y="66" width="32" height="6" rx="2" fill="#2a0d4f"/><path d="M330 72v12" stroke="#ffd76e" stroke-width="2"/></g>
+    <g fill="#fff"><circle class="blink" cx="262" cy="24" r="2"/><circle cx="384" cy="96" r="1.600"/><circle class="blink" cx="252" cy="104" r="1.500"/><circle cx="174" cy="22" r="1.500"/></g>
+  </svg>`,
+  // звёздочки помощника
+  ai: `<svg class="art" viewBox="0 0 400 130" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="artAi" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4c1d95"/><stop offset=".6" stop-color="#7c3aed"/><stop offset="1" stop-color="#db2777"/></linearGradient></defs>
+    <rect width="400" height="130" fill="url(#artAi)"/>
+    <path d="M70 16l9 26 26 9-26 9-9 26-9-26-26-9 26-9z" fill="#fff"/>
+    <path d="M128 58l5 14 14 5-14 5-5 14-5-14-14-5 14-5z" fill="#fbcfe8"/>
+    <path d="M152 12l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#e9d5ff"/>
+    <g fill="#fff"><circle class="blink" cx="232" cy="22" r="2"/><circle cx="300" cy="30" r="1.600"/><circle class="blink" cx="372" cy="18" r="2"/><circle cx="212" cy="100" r="1.500"/><circle cx="352" cy="60" r="1.400"/></g>
+  </svg>`,
   // двое на холме под луной, рядом кот
   more: `<svg class="art" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
     <defs><linearGradient id="artFm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2a9e"/><stop offset=".6" stop-color="#6a2fc4"/><stop offset="1" stop-color="#c55bc8"/></linearGradient></defs>
@@ -812,37 +860,41 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
-  const titles = { tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
+  if (isRel() && !REL_TABS.includes(S.tab)) S.tab = 'home';
+  const titles = { chat: 'Чат семьи', tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
   let body = '';
-  if (S.tab === 'home') body = renderHome();
+  if (S.tab === 'home') body = isRel() ? renderRelHome() : renderHome();
   else {
     body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b>${KANJI[S.tab] ? `<span class="kj jpf" lang="ja" aria-hidden="true">${KANJI[S.tab]}</span>` : ''}</div>`;
     if (S.tab === 'tx') body += monthBar() + renderTx();
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() + `<button class="ghost full" id="sumopen">📊 Подробные итоги ${MONTH_GEN[S.month.getMonth()]}</button>` : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
-    else if (S.tab === 'settings') body += renderSettings();
+    else if (S.tab === 'settings') body += isRel() ? renderRelSettings() : renderSettings();
+    else if (S.tab === 'chat') body += renderFam();
     else if (S.tab === 'todo') body += (S.todoSub === 'cal' ? monthBar() : '') + todoSeg() + (S.todoSub === 'cal' ? renderCal() : renderTodo());
     else body += renderMore();
   }
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
   const enter = S._enter ? ' enter-' + S._enter : '';
   S._enter = null;
-  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
+  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' || S.tab === 'chat' || (isRel() && S.tab === 'home') ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' || S.tab === 'chat' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
   if ($('#mic')) $('#mic').onclick = openVoice;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'buy' ? ($('#bin') && $('#bin').focus ? $('#bin').focus() : null) : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
-  if (S.tab === 'home') countUp();
+  if (S.tab === 'home' && !isRel()) countUp();
+  if (S.tab === 'chat') bindFam();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
-  if (S.tab === 'settings') hydratePush();
+  if (S.tab === 'settings' && !isRel()) hydratePush();
   if ($('#gear')) $('#gear').onclick = () => go('settings');
   if ($('#sumcard')) $('#sumcard').onclick = () => openSummary(ymAdd(ymNow(), -1));
   if ($('#sumopen')) $('#sumopen').onclick = () => openSummary(S.month.getFullYear() + '-' + pad(S.month.getMonth() + 1));
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
+  if ($('#aitile')) $('#aitile').onclick = openVoice;
   bindTab();
 }
 
@@ -887,12 +939,14 @@ function countUp() {
 // операции, которые входят в суммы: «не учитывать» остаются в списке, но не считаются нигде
 const counted = (list = S.tx) => list.filter(t => !t.excluded);
 
+const GEAR_BTN = `<button class="iconbtn" id="gear" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.75 10.13L20.99 10.03L20.99 13.97L18.75 13.87L18.09 15.45L19.75 16.96L16.96 19.75L15.45 18.09L13.87 18.75L13.97 20.99L10.03 20.99L10.13 18.75L8.55 18.09L7.04 19.75L4.25 16.96L5.91 15.45L5.25 13.87L3.01 13.97L3.01 10.03L5.25 10.13L5.91 8.55L4.25 7.04L7.04 4.25L8.55 5.91L10.13 5.25L10.03 3.01L13.97 3.01L13.87 5.25L15.45 5.91L16.96 4.25L19.75 7.04L18.09 8.55Z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
+
 function renderHome() {
   const inc = counted().filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
   const exp = counted().filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
   return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
-    <button class="iconbtn" id="gear" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.75 10.13L20.99 10.03L20.99 13.97L18.75 13.87L18.09 15.45L19.75 16.96L16.96 19.75L15.45 18.09L13.87 18.75L13.97 20.99L10.03 20.99L10.13 18.75L8.55 18.09L7.04 19.75L4.25 16.96L5.91 15.45L5.25 13.87L3.01 13.97L3.01 10.03L5.25 10.13L5.91 8.55L4.25 7.04L7.04 4.25L8.55 5.91L10.13 5.25L10.03 3.01L13.97 3.01L13.87 5.25L15.45 5.91L16.96 4.25L19.75 7.04L18.09 8.55Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+    ${GEAR_BTN}</div>
   ${monthBar()}
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
@@ -910,6 +964,7 @@ function renderHome() {
     <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? (buyCount() ? 'Купить: ' + buyCount() : 'Всё есть') : 'нужно обновить базу'}</span></div></button>
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
     <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${!S.tasksReady ? 'нужно обновить базу' : todayTasks().length ? 'На сегодня: ' + todayTasks().length : openTasks().length ? 'Всего дел: ' + openTasks().length : 'Дел нет'}</span></div></button>
+    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чат семьи</b><span id="chatsub">${chatSub()}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
   </div>
   ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)">/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
@@ -1060,6 +1115,7 @@ function renderMore() {
     <div>${S.members.map(m => esc(m.name)).join(', ')}</div>
     ${S.members.length < 2 ? inviteHtml()
       : S.me.role === 'owner' ? '<button class="link" id="invmore" style="padding:8px 0 0">Пригласить ещё одного человека</button><div id="invbox"></div>' : ''}</div>
+  ${renderRelCard()}
   ${renderInboxCard()}
   <div class="mute" style="padding:0 4px">Уведомления, автоимпорт, резервная копия и выход — в настройках: значок шестерёнки на главном экране.</div>`;
 }
@@ -1111,6 +1167,8 @@ function bindTab() {
   if ($('#mwp')) { $('#mwp').onclick = () => { S.menuWeek--; S._enter = 'sub'; render(); }; $('#mwn').onclick = () => { S.menuWeek++; S._enter = 'sub'; render(); }; }
   if ($('#recipes')) $('#recipes').onclick = openRecipes;
   if ($('#invmore')) $('#invmore').onclick = () => { $('#invbox').innerHTML = inviteHtml(); $('#invmore').remove(); };
+  if ($('#relinv')) $('#relinv').onclick = () => { $('#relbox').innerHTML = relInviteHtml(); $('#relinv').remove(); };
+  $('#app').querySelectorAll('[data-rmrel]').forEach(b => b.onclick = () => removeRelative(b.dataset.rmrel));
   if ($('#badd')) {
     $('#badd').onclick = addShopItem;
     $('#bin').onkeydown = e => { if (e.key === 'Enter') addShopItem(); };
@@ -2712,14 +2770,15 @@ async function uploadPhotos(files) {
   for (let i = 0; i < files.length; i++) {
     t.textContent = `Загружаем ${i + 1} из ${files.length}…`;
     const id = crypto.randomUUID();
-    const path = `${S.household.id}/${id}.jpg`, tpath = `${S.household.id}/${id}_t.jpg`;
+    const hid = S.household ? S.household.id : S.me.household_id;
+    const path = `${hid}/${id}.jpg`, tpath = `${hid}/${id}_t.jpg`;
     try {
       const full = await toJpeg(files[i], 1920, .82), th = await toJpeg(files[i], 420, .75);
       let r = await bucket().upload(path, full.blob, { contentType: 'image/jpeg' });
       if (r.error) throw r.error;
       r = await bucket().upload(tpath, th.blob, { contentType: 'image/jpeg' });
       if (r.error) { await bucket().remove([path]); throw r.error; }
-      r = await sb.from('photos').insert({ id, household_id: S.household.id, user_id: S.user.id, path, thumb_path: tpath,
+      r = await sb.from('photos').insert({ id, household_id: hid, user_id: S.user.id, path, thumb_path: tpath,
         width: full.w, height: full.h, size: full.blob.size });
       if (r.error) { await bucket().remove([path, tpath]); throw r.error; }
       ok++;
@@ -3322,7 +3381,7 @@ async function toggleTask(id) {
 
 // ---------- японские мотивы ----------
 // иероглифы разделов: на плитках главной и рядом с заголовком экрана
-const KANJI = { tx: '取引', lim: '予算', food: '食料', more: '家族', todo: '予定', photos: '写真', settings: '設定' };
+const KANJI = { chat: '会話', ai: '助手', tx: '取引', lim: '予算', food: '食料', more: '家族', todo: '予定', photos: '写真', settings: '設定' };
 // японское приветствие по времени суток
 const jpGreeting = () => { const h = new Date().getHours(); return h < 5 ? 'おやすみ' : h < 11 ? 'おはよう' : h < 18 ? 'こんにちは' : 'こんばんは'; };
 // пословица дня: [по-японски, чтение, перевод, смысл]
@@ -3467,6 +3526,7 @@ try {
 } catch (e) {}
 // уведомление «Итоги месяца» открывает приложение со ссылкой ./?itogi=YYYY-MM
 function openFromUrl(url) {
+  if (isRel()) return;
   let ym = null;
   try { ym = new URL(url, location.href).searchParams.get('itogi'); } catch (e) {}
   if (ym) openSummary(ym);
@@ -3479,6 +3539,194 @@ function openFromLaunch() {
   openSummary(m[1]);
 }
 
+// ---------- чат семьи и родственники (update-19.sql) ----------
+// Родственник по коду для родственников попадает в семью с ролью relative: видит только чат семьи, общие фото
+// и помощника. Остальное ему закрыто в базе (my_household() для него пусто), а здесь просто не показывается.
+function setMsgs(r) {
+  S.msgsReady = !r.error;
+  S.msgs = S.msgsReady ? (r.data || []).slice().reverse() : [];
+}
+async function loadMsgs() {
+  const r = await sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300);
+  if (r.error) return;
+  const before = S.msgs.map(x => x.id).join();
+  const pend = S.msgs.filter(x => x._pending && !(r.data || []).some(y => y.id === x.id));
+  setMsgs(r);
+  S.msgs = S.msgs.concat(pend);
+  if (S.msgs.map(x => x.id).join() === before) return;
+  if (S.tab === 'chat') drawFam();
+  else if ($('#chatsub')) $('#chatsub').textContent = chatSub();
+}
+async function refreshRel(opts = {}) {
+  const [m, ph, fm] = await Promise.all([
+    sb.from('members').select('*'),
+    sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
+    sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300)]);
+  if ([m, ph].some(x => x.error && isNetErr(x.error))) {
+    const was = S.offline; S.offline = true;
+    if (!was || !opts.poll) render();
+    startPolling();
+    return;
+  }
+  if (m.error) return fail(m.error);
+  const wasOff = S.offline;
+  S.offline = false;
+  const sig = JSON.stringify([m.data, ph.data, fm.data, wasOff]);
+  if (opts.poll && sig === S._sig) return;
+  S._sig = sig;
+  S.dataVer++;
+  setPeople(m.data);
+  if (!S.me) return load();            // убрали из семьи: снова экран «Меня пригласили»
+  S.photosReady = !ph.error;
+  S.photos = (S.photosReady && ph.data) || [];
+  setMsgs(fm);
+  saveSnap();
+  render();
+}
+
+// непрочитанные: время последнего увиденного сообщения хранится на телефоне
+const famSeen = () => { try { return localStorage.getItem('fb_fam_seen') || ''; } catch (e) { return ''; } };
+const famUnread = () => S.msgs.filter(m => m.user_id !== S.user.id && !m._pending && m.created_at > famSeen()).length;
+function famMarkSeen() {
+  const last = S.msgs.filter(m => !m._pending).slice(-1)[0];
+  if (last) { try { localStorage.setItem('fb_fam_seen', last.created_at); } catch (e) {} }
+}
+function chatSub() {
+  if (!S.msgsReady) return 'нужно обновить базу';
+  const u = famUnread();
+  if (u) return 'Новых: ' + u;
+  const last = S.msgs.slice(-1)[0];
+  return last ? (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + String(last.body).replace(/\s+/g, ' ').slice(0, 40) : 'Напишите родным';
+}
+
+const FAM_COLORS = ['#f9a8d4', '#7df0c4', '#fcd34d', '#93c5fd', '#fdba74', '#c4b5fd'];
+const famColor = id => { const i = S.circle.findIndex(m => m.user_id === id); return FAM_COLORS[(i < 0 ? 0 : i) % FAM_COLORS.length]; };
+const linkify = s => s.replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+function famDay(iso) {
+  const d = String(iso).slice(0, 10), loc = new Date(iso);
+  const dl = loc.getFullYear() + '-' + pad(loc.getMonth() + 1) + '-' + pad(loc.getDate());
+  if (dl === today()) return 'Сегодня';
+  if (dl === addDays(today(), -1)) return 'Вчера';
+  return loc.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', ...(loc.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }) || d;
+}
+function famHtml() {
+  if (!S.msgs.length) return '<div class="card"><div class="empty">Здесь общий чат всей семьи.<br>Напишите первое сообщение.</div></div>';
+  let out = '', lastDay = '';
+  const owner = S.me && S.me.role === 'owner';
+  S.msgs.forEach((m, i) => {
+    const day = famDay(m.created_at), newDay = day !== lastDay;
+    if (newDay) { out += `<div class="fday">${esc(day)}</div>`; lastDay = day; }
+    const mine = m.user_id === S.user.id, prev = S.msgs[i - 1];
+    const who = !mine && (newDay || !prev || prev.user_id !== m.user_id);
+    const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    out += `<div class="mrow${mine ? ' me' : ''}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}"${(mine || owner) && !m._pending ? ` data-fm="${m.id}"` : ''}>`
+      + (who ? `<b class="fwho" style="color:${famColor(m.user_id)}">${esc(nameOf(m.user_id))}</b>` : '')
+      + linkify(esc(m.body)) + `<span class="ft">${m._pending ? '…' : time}</span></div></div>`;
+  });
+  return out;
+}
+function renderFam() {
+  if (!S.msgsReady) return '<div class="card"><b>Чат семьи</b><p class="mute">Выполните файл update-19.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+  return `<div class="fchat" id="fchat">${famHtml()}</div>
+  <div class="fbar"><div class="cin"><textarea id="ftx" rows="1" placeholder="Сообщение семье…" maxlength="4000" enterkeyhint="send"></textarea></div>
+    <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div>`;
+}
+const famBottom = () => { try { window.scrollTo(0, document.body.scrollHeight); } catch (e) {} };
+function drawFam() {
+  if (!$('#fchat')) return;
+  $('#fchat').innerHTML = famHtml();
+  bindFamRows();
+  famMarkSeen();
+  famBottom();
+}
+function bindFamRows() {
+  $('#app').querySelectorAll('[data-fm]').forEach(el => el.onclick = e => {
+    if (e && e.target && e.target.closest && e.target.closest('a')) return;
+    deleteFam(el.dataset.fm);
+  });
+}
+function bindFam() {
+  if (!$('#ftx')) return;
+  bindFamRows();
+  famMarkSeen();
+  const tx = $('#ftx');
+  const fit = () => { if (tx.style) { tx.style.height = 'auto'; tx.style.height = Math.min(132, tx.scrollHeight || 0) + 'px'; } };
+  tx.oninput = fit;
+  tx.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendFam(); } };
+  $('#fgo').onclick = sendFam;
+  setTimeout(famBottom, 0);
+}
+async function sendFam() {
+  const tx = $('#ftx');
+  const body = (tx.value || '').trim().slice(0, 4000);
+  if (!body) return;
+  const row = { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body };
+  S.msgs.push({ ...row, created_at: new Date().toISOString(), _pending: true });
+  tx.value = ''; if (tx.style) tx.style.height = 'auto';
+  drawFam();
+  if (tx.focus) tx.focus();
+  const { error } = await sb.from('family_messages').insert(row);
+  if (error) {
+    S.msgs = S.msgs.filter(x => x.id !== row.id);
+    if (!tx.value) tx.value = body;
+    drawFam();
+    return toast(isNetErr(error) ? 'Нет связи: сообщение не отправлено' : 'Не отправилось: ' + error.message, 4000);
+  }
+  const x = S.msgs.find(m => m.id === row.id);
+  if (x) delete x._pending;
+  drawFam();
+  loadMsgs();
+}
+async function deleteFam(id) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m || !confirm('Удалить сообщение у всех?')) return;
+  const { error } = await sb.from('family_messages').delete().eq('id', id);
+  if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 3500);
+  S.msgs = S.msgs.filter(x => x.id !== id);
+  drawFam();
+}
+
+// главный экран родственника: только чат, фото и помощник
+function renderRelHome() {
+  return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
+    ${GEAR_BTN}</div>
+  <div class="grid">
+    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чат семьи</b><span id="chatsub">${chatSub()}</span></div></button>
+    <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
+    <button class="tile t1 wide" data-t="ai" id="aitile">${ICONS.ai}<div><b>Помощник</b><span>Спросите что угодно</span></div></button>
+  </div>
+  ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)"( id="\w+")?>/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
+}
+function renderRelSettings() {
+  return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span>
+    <div class="mute" style="margin-top:6px">В семье: ${esc(S.circle.map(m => m.name).join(', '))}</div></div>
+  <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
+    <div class="mute">Настройка действует только на этом телефоне.</div></div>
+  <div class="card"><b>Оформление</b> <span class="jpf mute" lang="ja">季節</span>
+    <select id="season">${Object.entries(SEASONS).map(([k, l]) => `<option value="${k}"${k === seasonPick() ? ' selected' : ''}>${esc(l)}${k === 'auto' ? ' (сейчас: ' + SEASONS[seasonNow()].split(':')[0].toLowerCase() + ')' : ''}</option>`).join('')}</select></div>
+  <button class="ghost full" id="lo">Выйти</button>`;
+}
+
+// «Семья» у мужа и жены: кто из родственников уже есть, приглашение и (для создателя семьи) «Убрать»
+const relInviteHtml = () => `<p>Код для родственника:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.relative_code)}</div>
+    <div class="mute">Пусть родственник установит приложение, зарегистрируется и выберет «Меня пригласили». Код одноразовый: после вступления он сменится.</div>`;
+function renderRelCard() {
+  if (!S.household || !S.household.relative_code) return '';
+  const rels = S.circle.filter(m => m.role === 'relative');
+  const owner = S.me && S.me.role === 'owner';
+  return `<div class="card"><b>Родственники</b>
+    <div class="mute">Видят только чат семьи, общие фото и помощника. Бюджет, дела, продукты и цели им недоступны.</div>
+    ${rels.map(m => `<div class="relrow"><span>${esc(m.name)}</span>${owner ? `<button class="link" data-rmrel="${m.user_id}">Убрать</button>` : ''}</div>`).join('')}
+    <button class="link" id="relinv" style="padding:8px 0 0">Пригласить родственника</button><div id="relbox"></div></div>`;
+}
+async function removeRelative(uid) {
+  const m = S.circle.find(x => x.user_id === uid);
+  if (!m || !confirm(`Убрать ${m.name} из семьи? Чат и общие фото будут этому человеку недоступны.`)) return;
+  const { error } = await sb.rpc('remove_relative', { p_user: uid });
+  if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 3500);
+  refresh();
+}
+
 // ---------- голосовой помощник ----------
 // Запись голоса (или текст) уходит в функцию voice -> Gemini; обратно приходят действия, их выполняем здесь
 // от имени вошедшего человека. Без связи с помощником простые фразы разбираются по шаблонам (voiceLocal).
@@ -3489,6 +3737,7 @@ let rec = null;   // идёт запись: { mr, stream, chunks, timer, t0 }
 
 // краткая сводка для помощника: что есть в приложении сейчас
 function voiceCtx() {
+  if (isRel()) return { guest: true, today: today(), weekday: new Date().toLocaleDateString('ru-RU', { weekday: 'long' }), me: S.me ? S.me.name : '' };
   const cname = id => (S.cats.find(c => c.id === id) || {}).name || 'Без категории';
   const spent = {};
   counted().filter(t => t.kind === 'expense').forEach(t => { const n = cname(t.category_id); spent[n] = (spent[n] || 0) + +t.amount; });
@@ -3630,10 +3879,11 @@ const CHAT_SUGGEST = [
   ['📅', 'Что у нас на завтра?', 'ask'], ['🍲', 'Что приготовить из того, что есть дома?', 'ask'],
   ['🛒', 'Купить молоко и хлеб', 'fill'], ['⏰', 'Завтра в 18:00 забрать посылку', 'fill']];
 
+const REL_SUGGEST = [['🍲', 'Что приготовить на ужин из курицы?', 'ask'], ['💊', 'Чем полезен шиповник?', 'ask'], ['✍️', 'Помоги написать поздравление с днём рождения', 'ask'], ['🌱', 'Когда сажать рассаду помидоров?', 'ask']];
 function chatHtml() {
   if (!S.chat.length) return `<div class="vempty"><div class="cava">${SPARK_SVG}</div><b>Чем помочь?</b>
-    <p>Спросите что угодно или попросите записать трату, покупку, дело.</p>
-    <div class="vsug">${CHAT_SUGGEST.map(([ic, t, k], i) => `<button data-sug="${i}"><span>${ic}</span>${esc(t)}</button>`).join('')}</div></div>`;
+    <p>${isRel() ? 'Спросите что угодно: рецепт, совет, перевод, поздравление.' : 'Спросите что угодно или попросите записать трату, покупку, дело.'}</p>
+    <div class="vsug">${(isRel() ? REL_SUGGEST : CHAT_SUGGEST).map(([ic, t, k], i) => `<button data-sug="${i}"><span>${ic}</span>${esc(t)}</button>`).join('')}</div></div>`;
   return S.chat.map(m => m.role === 'user' ? `<div class="mrow me"><div class="msg me">${esc(m.text)}</div></div>`
     : `<div class="mrow"><div class="cava sm">${SPARK_SVG}</div><div class="msg ai${m.bad ? ' bad' : ''}">${m.pending ? '<span class="dots"><i></i><i></i><i></i></span>' : replyHtml(m.text)}
       ${(m.done || []).length ? `<div class="vacts">${m.done.map(d => `<div class="vact${d.bad ? ' bad' : ''}${d.off ? ' off' : ''}"><i>${d.bad ? '!' : '✓'}</i><span>${esc(d.text)}</span></div>`).join('')}</div>` : ''}
@@ -3682,7 +3932,7 @@ function chatFit() {
 function openVoice() {
   const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
   chatLoad();
-  sheet(`<div class="chead"><div class="cava">${SPARK_SVG}</div><div class="ttl"><b>Помощник</b><span>Ответит и запишет за вас</span></div>
+  sheet(`<div class="chead"><div class="cava">${SPARK_SVG}</div><div class="ttl"><b>Помощник</b><span>${isRel() ? 'Ответит на любой вопрос' : 'Ответит и запишет за вас'}</span></div>
       <button id="vnew" aria-label="Новый разговор" title="Новый разговор"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
       <button id="cl" aria-label="Закрыть" title="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="vchat" id="vchat"></div>
@@ -3801,13 +4051,13 @@ async function voiceSend(payload) {
   let res = null, why = '';
   try {
     const ctx = voiceCtx();
-    const ys = await yearStats().catch(() => null);
+    const ys = isRel() ? null : await yearStats().catch(() => null);
     if (ys) { ctx['Помесячно за год'] = ys.months; ctx['Крупные траты за год'] = ys.top; }
     const { data, error } = await sb.functions.invoke(VOICE_FN, { body: { ...payload, history, ctx } });
     if (error) why = await voiceErr(error); else res = data;
   } catch (e) { why = 'Помощник не ответил. Попробуйте ещё раз.'; }
   // помощник недоступен, но есть текст: простые команды разбираем сами
-  if (!res && payload.text) {
+  if (!res && payload.text && !isRel()) {
     const local = voiceLocal(payload.text);
     if (local.length) res = { transcript: payload.text, actions: local, reply: 'Помощник сейчас недоступен (' + why.replace(/\.$/, '').toLowerCase() + '), но эту команду я понял сам.', local: true };
   }
@@ -3815,7 +4065,7 @@ async function voiceSend(payload) {
   if (!res) { ai.text = why; ai.bad = true; }
   else {
     if (!payload.text && res.transcript) user.text = '🎤 ' + res.transcript;
-    const actions = voiceClean(res.actions);
+    const actions = isRel() ? [] : voiceClean(res.actions);
     const done = actions.length ? await voiceRun(actions) : [];
     ai.text = res.reply || (done.length ? '' : 'Не понял. Скажите или напишите по-другому.');
     ai.done = done.map(d => ({ text: d.text, bad: !!d.bad }));
