@@ -198,6 +198,11 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .fbar{position:sticky;bottom:0;z-index:4;display:flex;gap:8px;align-items:flex-end;padding:12px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(rgba(18,11,36,0),var(--bg) 35%)}
 .fbar>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
 .fbar>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fpeople{position:sticky;top:0;z-index:4;display:flex;gap:8px;overflow-x:auto;padding:calc(6px + env(safe-area-inset-top)) 2px 10px;margin:0 -2px;scrollbar-width:none;background:linear-gradient(var(--bg) 75%,rgba(18,11,36,0))}
+.fpeople::-webkit-scrollbar{display:none}
+.fpeople button{flex:none;display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);font-size:14px;box-shadow:none}
+.fpeople button.on{background:var(--grad);border-color:transparent;color:#fff}
+.fpeople button b{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--bad);color:#fff;font-size:12px;line-height:20px;text-align:center}
 .relrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0}
 .tile.wide{grid-column:1/-1;aspect-ratio:auto;min-height:118px;flex-direction:row;align-items:flex-end}
 .tile.wide svg{align-self:flex-start;width:52px;height:52px}
@@ -416,7 +421,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            circle: [], msgs: [], msgsReady: false, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -1160,6 +1165,7 @@ function bindTab() {
   $('#app').querySelectorAll('.mcol').forEach(b => b.onclick = () => { S.month = new Date(+b.dataset.m); S._enter = 'sub'; refresh(); });
   if ($('#excsv')) $('#excsv').onclick = exportCsv;
   if ($('#exjson')) $('#exjson').onclick = exportJson;
+  $('#app').querySelectorAll('.seg button[data-alb]').forEach(b => b.onclick = () => { S.album = b.dataset.alb; S._enter = 'sub'; render(); });
   $('#app').querySelectorAll('.seg button[data-sub]').forEach(b => b.onclick = () => { S.sub = b.dataset.sub; S._enter = 'sub'; render(); });
   $('#app').querySelectorAll('.pi[data-p]').forEach(el => el.onclick = () => openStockItem(el.dataset.p));
   $('#app').querySelectorAll('.pi[data-s]').forEach(el => el.onclick = () => openStaple(el.dataset.s));
@@ -2688,21 +2694,27 @@ function toast(msg, ms = 2600) {
   return t;
 }
 
+// альбомы (update-20.sql): «только мы» — муж и жена, «вся семья» — и родственники; родственник видит только второй
+const photoScope = ph => ph.scope || 'couple';
+const albumPhotos = () => isRel() ? S.photos : S.photos.filter(ph => photoScope(ph) === S.album);
+const albumSeg = () => isRel() ? '' : `<div class="seg fit"><button data-alb="couple" class="${S.album === 'couple' ? 'on' : ''}">Только мы</button><button data-alb="family" class="${S.album === 'family' ? 'on' : ''}">Вся семья</button></div>
+  <div class="mute" style="padding:0 4px 8px">${S.album === 'couple' ? 'Видите только вы вдвоём.' : 'Видят все, включая родственников.'}</div>`;
 function renderPhotos() {
   if (!S.photosReady) {
     return '<div class="card"><b>Фото</b><p class="mute">Выполните файл update-7.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
   }
-  if (!S.photos.length) {
-    return '<div class="card"><div class="empty">Фотографий пока нет.<br>Нажмите + и выберите снимки из галереи.<br>Их увидит вся семья.</div></div>';
+  const list = albumPhotos();
+  if (!list.length) {
+    return albumSeg() + `<div class="card"><div class="empty">Фотографий пока нет.<br>Нажмите + и выберите снимки из галереи.<br>${isRel() || S.album === 'family' ? 'Их увидит вся семья.' : 'Их увидите только вы вдвоём.'}</div></div>`;
   }
   const groups = [];
-  S.photos.forEach(ph => {
+  list.forEach(ph => {
     const label = new Date(ph.created_at).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
     let g = groups[groups.length - 1];
     if (!g || g.label !== label) groups.push(g = { label, items: [] });
     g.items.push(ph);
   });
-  return groups.map(g => `<div class="day">${esc(g.label)}</div><div class="pgrid">${g.items.map(ph =>
+  return albumSeg() + groups.map(g => `<div class="day">${esc(g.label)}</div><div class="pgrid">${g.items.map(ph =>
     `<div class="ph" data-id="${ph.id}"><img data-p="${esc(ph.thumb_path)}" alt=""><i>${esc((nameOf(ph.user_id)[0] || '').toUpperCase())}</i></div>`).join('')}</div>`).join('');
 }
 
@@ -2778,7 +2790,7 @@ async function uploadPhotos(files) {
       if (r.error) throw r.error;
       r = await bucket().upload(tpath, th.blob, { contentType: 'image/jpeg' });
       if (r.error) { await bucket().remove([path]); throw r.error; }
-      r = await sb.from('photos').insert({ id, household_id: hid, user_id: S.user.id, path, thumb_path: tpath,
+      r = await sb.from('photos').insert({ id, household_id: hid, user_id: S.user.id, path, thumb_path: tpath, scope: isRel() ? 'family' : S.album,
         width: full.w, height: full.h, size: full.blob.size });
       if (r.error) { await bucket().remove([path, tpath]); throw r.error; }
       ok++;
@@ -2801,23 +2813,26 @@ function viewerKey(e) {
 let viewerId = null;
 function stepViewer(d) {
   if (!viewerId) return;          // открыт чек, а не фото семьи: листать нечего
-  const i = S.photos.findIndex(x => x.id === viewerId) + d;
-  if (i >= 0 && i < S.photos.length) openViewer(S.photos[i].id);
+  const list = albumPhotos();
+  const i = list.findIndex(x => x.id === viewerId) + d;
+  if (i >= 0 && i < list.length) openViewer(list[i].id);
 }
 
 async function openViewer(id) {
-  const i = S.photos.findIndex(x => x.id === id);
+  const list = albumPhotos();
+  const i = list.findIndex(x => x.id === id);
   if (i < 0) return;
-  const ph = S.photos[i];
+  const ph = list[i];
   viewerId = id;
   closeViewer();
   const canDel = ph.user_id === S.user.id || (S.me && S.me.role === 'owner');
   const v = document.createElement('div');
   v.className = 'viewer'; v.id = 'viewer';
-  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>${i + 1} из ${S.photos.length}</span></div>
+  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>${i + 1} из ${list.length}</span></div>
     <div class="vi"><img id="vimg" data-p="${esc(ph.thumb_path)}" alt="" style="filter:blur(6px)"></div>
     <div class="vb"><div class="mute">${esc(nameOf(ph.user_id))} · ${esc(new Date(ph.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }))}</div>
       <input id="vc" value="${esc(ph.caption || '')}" placeholder="Подпись" maxlength="200">
+      ${isRel() ? '' : `<button class="ghost full" id="vm">${photoScope(ph) === 'couple' ? '👨‍👩‍👧 Показать всей семье' : '🔒 Оставить только нам'}</button>`}
       <div class="row"><button class="ghost" id="vs">Сохранить на телефон</button>${canDel ? '<button class="ghost" id="vd" style="color:var(--bad)">Удалить</button>' : ''}</div></div>`;
   document.body.appendChild(v);
   viewerOpen = true;
@@ -2830,6 +2845,15 @@ async function openViewer(id) {
     if (x0 === null) return;
     const dx = e.changedTouches[0].clientX - x0; x0 = null;
     if (Math.abs(dx) > 50) stepViewer(dx < 0 ? 1 : -1);
+  };
+  if (v.querySelector('#vm')) v.querySelector('#vm').onclick = async () => {
+    const scope = photoScope(ph) === 'couple' ? 'family' : 'couple';
+    const { error } = await sb.from('photos').update({ scope }).eq('id', id);
+    if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 4000);
+    ph.scope = scope;
+    closeViewerUI();
+    toast(scope === 'family' ? 'Фото в альбоме «Вся семья»' : 'Фото в альбоме «Только мы»');
+    render();
   };
   v.querySelector('#vc').onchange = async e => {
     const caption = e.target.value.trim() || null;
@@ -3585,18 +3609,23 @@ async function refreshRel(opts = {}) {
 }
 
 // непрочитанные: время последнего увиденного сообщения хранится на телефоне
-const famSeen = () => { try { return localStorage.getItem('fb_fam_seen') || ''; } catch (e) { return ''; } };
-const famUnread = () => S.msgs.filter(m => m.user_id !== S.user.id && !m._pending && m.created_at > famSeen()).length;
+const convOf = m => m.to_user ? (m.user_id === S.user.id ? m.to_user : m.user_id) : '';
+const convMsgs = (key = S.chatWith || '') => S.msgs.filter(m => convOf(m) === key);
+const famSeenMap = () => { const o = lsGet('fb_fam_seen2'); if (o && typeof o === 'object') return o; let old = ''; try { old = localStorage.getItem('fb_fam_seen') || ''; } catch (e) {} return { '': old }; };
+// новых в одной переписке (key) или во всех (key не задан)
+const famUnread = key => { const seen = famSeenMap(); return S.msgs.filter(m => m.user_id !== S.user.id && !m._pending && (key === undefined || convOf(m) === key) && m.created_at > (seen[convOf(m)] || '')).length; };
 function famMarkSeen() {
-  const last = S.msgs.filter(m => !m._pending).slice(-1)[0];
-  if (last) { try { localStorage.setItem('fb_fam_seen', last.created_at); } catch (e) {} }
+  const key = S.chatWith || '', last = convMsgs(key).filter(m => !m._pending).slice(-1)[0];
+  if (!last) return;
+  const seen = famSeenMap(); seen[key] = last.created_at; lsSet('fb_fam_seen2', seen);
+  if (!key) { try { localStorage.setItem('fb_fam_seen', last.created_at); } catch (e) {} }
 }
 function chatSub() {
   if (!S.msgsReady) return 'нужно обновить базу';
   const u = famUnread();
   if (u) return 'Новых: ' + u;
   const last = S.msgs.slice(-1)[0];
-  return last ? (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + String(last.body).replace(/\s+/g, ' ').slice(0, 40) : 'Напишите родным';
+  return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + String(last.body).replace(/\s+/g, ' ').slice(0, 40) : 'Напишите родным';
 }
 
 const FAM_COLORS = ['#f9a8d4', '#7df0c4', '#fcd34d', '#93c5fd', '#fdba74', '#c4b5fd'];
@@ -3609,15 +3638,23 @@ function famDay(iso) {
   if (dl === addDays(today(), -1)) return 'Вчера';
   return loc.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', ...(loc.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }) || d;
 }
+// собеседники: общий чат и каждый член семьи, с числом новых
+function famPeople() {
+  const chip = (key, label) => { const u = famUnread(key); return `<button data-cw="${key}" class="${(S.chatWith || '') === key ? 'on' : ''}">${label}${u ? `<b>${u}</b>` : ''}</button>`; };
+  return `<div class="fpeople">${chip('', '👨‍👩‍👧 Все')}${S.circle.filter(m => m.user_id !== S.user.id).map(m => chip(m.user_id, esc(m.name))).join('')}</div>`;
+}
 function famHtml() {
-  if (!S.msgs.length) return '<div class="card"><div class="empty">Здесь общий чат всей семьи.<br>Напишите первое сообщение.</div></div>';
+  const list = convMsgs();
+  if (!list.length) return S.chatWith
+    ? `<div class="card"><div class="empty">Личная переписка с ${esc(nameOf(S.chatWith))}.<br>Её видите только вы двое.</div></div>`
+    : '<div class="card"><div class="empty">Здесь общий чат всей семьи.<br>Напишите первое сообщение.</div></div>';
   let out = '', lastDay = '';
-  const owner = S.me && S.me.role === 'owner';
-  S.msgs.forEach((m, i) => {
+  const owner = S.me && S.me.role === 'owner' && !S.chatWith;
+  list.forEach((m, i, arr) => {
     const day = famDay(m.created_at), newDay = day !== lastDay;
     if (newDay) { out += `<div class="fday">${esc(day)}</div>`; lastDay = day; }
-    const mine = m.user_id === S.user.id, prev = S.msgs[i - 1];
-    const who = !mine && (newDay || !prev || prev.user_id !== m.user_id);
+    const mine = m.user_id === S.user.id, prev = arr[i - 1];
+    const who = !mine && !S.chatWith && (newDay || !prev || prev.user_id !== m.user_id);
     const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     out += `<div class="mrow${mine ? ' me' : ''}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}"${(mine || owner) && !m._pending ? ` data-fm="${m.id}"` : ''}>`
       + (who ? `<b class="fwho" style="color:${famColor(m.user_id)}">${esc(nameOf(m.user_id))}</b>` : '')
@@ -3627,8 +3664,9 @@ function famHtml() {
 }
 function renderFam() {
   if (!S.msgsReady) return '<div class="card"><b>Чат семьи</b><p class="mute">Выполните файл update-19.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
-  return `<div class="fchat" id="fchat">${famHtml()}</div>
-  <div class="fbar"><div class="cin"><textarea id="ftx" rows="1" placeholder="Сообщение семье…" maxlength="4000" enterkeyhint="send"></textarea></div>
+  if (S.chatWith && !S.circle.some(m => m.user_id === S.chatWith)) S.chatWith = null;
+  return `${famPeople()}<div class="fchat" id="fchat">${famHtml()}</div>
+  <div class="fbar"><div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea></div>
     <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div>`;
 }
 const famBottom = () => { try { window.scrollTo(0, document.body.scrollHeight); } catch (e) {} };
@@ -3637,6 +3675,8 @@ function drawFam() {
   $('#fchat').innerHTML = famHtml();
   bindFamRows();
   famMarkSeen();
+  const fp = document.querySelector('.fpeople');
+  if (fp && fp.outerHTML !== undefined) { fp.outerHTML = famPeople(); bindFamPeople(); }
   famBottom();
 }
 function bindFamRows() {
@@ -3645,8 +3685,12 @@ function bindFamRows() {
     deleteFam(el.dataset.fm);
   });
 }
+function bindFamPeople() {
+  $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; render(); });
+}
 function bindFam() {
   if (!$('#ftx')) return;
+  bindFamPeople();
   bindFamRows();
   famMarkSeen();
   const tx = $('#ftx');
@@ -3660,7 +3704,7 @@ async function sendFam() {
   const tx = $('#ftx');
   const body = (tx.value || '').trim().slice(0, 4000);
   if (!body) return;
-  const row = { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body };
+  const row = { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body, ...(S.chatWith ? { to_user: S.chatWith } : {}) };
   S.msgs.push({ ...row, created_at: new Date().toISOString(), _pending: true });
   tx.value = ''; if (tx.style) tx.style.height = 'auto';
   drawFam();
