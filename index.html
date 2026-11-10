@@ -904,7 +904,7 @@ function render() {
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
   if (S.tab === 'home' && !isRel()) countUp();
-  if (S.tab === 'home' && !isRel()) tickTrip();
+  if (S.tab === 'home') tickTrip();
   if (S.tab === 'chat') bindFam();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
@@ -3788,6 +3788,7 @@ async function deleteFam(id) {
 function renderRelHome() {
   return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
     ${GEAR_BTN}</div>
+  ${renderTrip()}
   <div class="grid">
     <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чат семьи</b><span id="chatsub">${chatSub()}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
