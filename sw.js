@@ -1,7 +1,7 @@
 // Сервис-воркер: приложение открывается даже без интернета и при плохой связи.
 // Файлы самого приложения: сначала сеть (чтобы приходили обновления), если она не отвечает 4 секунды, берём сохранённую копию.
 // Данные (proxy.php, supabase.co) никогда не кэшируются: за них отвечает приложение.
-const V = 'fb-v8';
+const V = 'fb-v9';
 const SHELL = ['./', 'index.html', 'manifest.json', 'supabase.js'];
 
 self.addEventListener('install', e => {
@@ -15,7 +15,8 @@ const withTimeout = (p, ms) => new Promise((res, rej) => { const t = setTimeout(
 
 async function networkFirst(req) {
   const cache = await caches.open(V);
-  const live = fetch(req).then(r => { if (r && (r.ok || r.type === 'opaque')) cache.put(req, r.clone()); return r; });
+  // no-cache: браузер всегда спрашивает сервер, не изменился ли файл (GitHub разрешает хранить старую копию 10 минут)
+  const live = fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then(r => { if (r && (r.ok || r.type === 'opaque')) cache.put(req, r.clone()); return r; });
   live.catch(() => {});
   try { return await withTimeout(live, 4000); }
   catch (e) {

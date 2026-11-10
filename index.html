@@ -4443,7 +4443,22 @@ function storedUser() {
     else if (session && (!S.user || S.user.id !== session.user.id)) { S.user = session.user; load(); }
   });
   if (typeof navigator.serviceWorker === 'object' && /^https?:$/.test(location.protocol)) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // обновления: телефон проверяет новую версию при каждом открытии и сам перезагружает приложение,
+    // когда она пришла (если человек ничего не набирает и не смотрит фото — иначе при следующем открытии)
+    const hadSw = !!navigator.serviceWorker.controller;
+    let reloadDue = false;
+    const calmNow = () => !document.getElementById('sh') && !viewerOpen && !(document.getElementById('ftx') && document.getElementById('ftx').value) && !(document.getElementById('vtx') && document.getElementById('vtx').value);
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        if (reloadDue && calmNow()) return location.reload();
+        reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadSw) return;                       // первая установка, а не обновление
+      if (calmNow()) location.reload(); else reloadDue = true;
+    });
   }
   const { data } = await sb.auth.getSession();
   if (!data.session) {
