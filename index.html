@@ -870,7 +870,7 @@ function renderMore() {
 function renderSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
   <div class="card"><b>Уведомления</b>
-    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты.</div>
+    <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты. И за час до дела, у которого указано время.</div>
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
@@ -2934,7 +2934,7 @@ function openTask(id, pre = {}) {
   sheet(`<b>${t ? 'Дело' : 'Новое дело'}</b>
     <input id="tt" value="${esc(v.title)}" placeholder="Что сделать, например: записать кота к врачу" maxlength="300">
     <div class="row" style="gap:8px"><input id="tdt" type="date" value="${esc(v.due || '')}" style="flex:1"><input id="ttm" type="time" value="${esc((v.due_time || '').slice(0, 5))}" style="width:116px"></div>
-    <div class="mute">Дату и время можно не указывать.</div>
+    <div class="mute">Дату и время можно не указывать. Если указать время, за час придёт напоминание: общее дело — всем, своё — только тому, чьё оно.</div>
     <select id="tas"><option value="">Общее</option>${S.members.map(m => `<option value="${m.user_id}"${m.user_id === v.assignee ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
     <select id="trp"><option value="">Не повторять</option>${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${l}</option>`).join('')}</select>
     <div class="err" id="err"></div>

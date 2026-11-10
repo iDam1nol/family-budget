@@ -1,6 +1,7 @@
 // Функция Supabase «push-digest»: утренняя сводка семьи в push-уведомлении.
 // Вызывается двумя способами:
 //  1) по расписанию (update-14.sql) с заголовком x-cron-secret: сводка всем включённым телефонам;
+//     с телом {"mode":"remind"} (update-16.sql, раз в 5 минут) — напоминания о делах за час;
 //  2) кнопкой «Прислать проверочное» в приложении (вход пользователя): только на его телефоны.
 // Нужные секреты функции (Edge Functions -> Secrets): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET.
 // Проверку JWT в настройках функции нужно выключить: функция проверяет вход сама.
@@ -58,6 +59,18 @@ function buildDigest(d) {
 
   return lines.length ? { title: 'Семья: на сегодня', body: lines.join('\n') } : null;
 }
+
+// напоминание о деле за час: время дела московское (UTC+3 круглый год)
+const taskStart = t => Date.parse(t.due + 'T' + String(t.due_time).slice(0, 5) + ':00+03:00');
+// t — дело, now — миллисекунды -> { title, body, tag } или null, если напоминать не нужно
+function remindMsg(t, now) {
+  if (!t || t.done || !t.due || !t.due_time || t.reminded_at) return null;
+  const left = taskStart(t) - now;
+  if (!(left > 0 && left <= 3600e3)) return null;
+  const mins = Math.round(left / 60000);
+  const when = mins >= 55 ? 'Через час' : mins <= 1 ? 'Сейчас' : 'Через ' + mins + ' мин';
+  return { title: when + ': ' + t.title, body: 'Дело на ' + String(t.due_time).slice(0, 5), tag: 'task-' + t.id };
+}
 // --- digest:end ---
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -84,6 +97,39 @@ Deno.serve(async (req: Request) => {
     const { data, error } = await db.auth.getUser(token);
     if (error || !data.user) return json({ error: 'нужен вход в приложение' }, 401);
     onlyUser = data.user.id; test = true;
+  }
+
+  // режим «напоминание о деле за час» (расписание update-16.sql, раз в 5 минут)
+  let body: any = {};
+  try { body = await req.json(); } catch (_) { /* пустое тело — обычная сводка */ }
+  if (cron && body && body.mode === 'remind') {
+    const now = Date.now();
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const { data: cand, error: te } = await db.from('tasks').select('*').eq('done', false).is('reminded_at', null)
+      .not('due_time', 'is', null).gte('due', day(now - 864e5)).lte('due', day(now + 864e5));
+    if (te) return json({ error: te.message }, 500);
+    let sent = 0, reminded = 0, removed = 0;
+    for (const t of cand || []) {
+      const msg = remindMsg(t, now);
+      if (!msg) continue;
+      // сначала ставим отметку: если два вызова совпали, напоминание уйдёт только один раз
+      const { data: got } = await db.from('tasks').update({ reminded_at: new Date().toISOString() }).eq('id', t.id).is('reminded_at', null).select('id');
+      if (!got || !got.length) continue;
+      reminded++;
+      let sq = db.from('push_subscriptions').select('*').eq('household_id', t.household_id);
+      if (t.assignee) sq = sq.eq('user_id', t.assignee);      // своё дело — только себе, общее — всей семье
+      const { data: list } = await sq;
+      for (const s of list || []) {
+        try {
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+            JSON.stringify({ ...msg, url: './' }), { TTL: 3600 });
+          sent++;
+        } catch (e: any) {
+          if (e && (e.statusCode === 404 || e.statusCode === 410)) { await db.from('push_subscriptions').delete().eq('id', s.id); removed++; }
+        }
+      }
+    }
+    return json({ reminded, sent, removed });
   }
 
   let q = db.from('push_subscriptions').select('*');
