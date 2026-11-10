@@ -291,6 +291,35 @@ button.cday.on{background:var(--grad)}
 #bg svg{display:block;width:100%;height:100%}
 #bg i{position:absolute;top:-16px;width:10px;height:10px;border-radius:80% 0 80% 0;background:#f7b8e0;opacity:.8;animation:petal 18s linear infinite}
 @keyframes petal{to{transform:translate3d(70px,110vh,0) rotate(540deg)}}
+/* ===== японские мотивы: времена года, иероглифы, печать, пословица ===== */
+.jpf{font-family:"Yuji Syuku","Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif}
+/* осень: листья клёна (момидзи), ветка в рыжих листьях */
+#bg[data-season=autumn] i{border-radius:0;width:14px;height:14px;background:var(--lc,#ff7a45);opacity:.85;animation-name:leaf;
+  clip-path:polygon(50% 0,61% 30%,90% 14%,76% 44%,100% 52%,72% 62%,80% 92%,54% 74%,50% 100%,46% 74%,20% 92%,28% 62%,0 52%,24% 44%,10% 14%,39% 30%)}
+@keyframes leaf{0%{transform:translate3d(0,0,0) rotate(0)}50%{transform:translate3d(-40px,55vh,0) rotate(220deg)}100%{transform:translate3d(30px,110vh,0) rotate(420deg)}}
+#bg[data-season=autumn] .bl1{fill:#ff7a45}#bg[data-season=autumn] .bl2{fill:#ffc061}
+/* зима: снег, ветка в снегу */
+#bg[data-season=winter] i{width:6px;height:6px;border-radius:50%;background:#fff;opacity:.75;animation-name:snow;box-shadow:0 0 6px rgba(255,255,255,.6)}
+@keyframes snow{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(14px,27vh,0)}50%{transform:translate3d(-10px,55vh,0)}75%{transform:translate3d(12px,82vh,0)}100%{transform:translate3d(0,110vh,0)}}
+#bg[data-season=winter] .bl1{fill:#f1f4ff}#bg[data-season=winter] .bl2{fill:#fff}
+/* лето: светлячки над крышами */
+#bg[data-season=summer] i{top:auto;bottom:var(--fb,30%);width:5px;height:5px;border-radius:50%;background:#fff6a0;box-shadow:0 0 10px 3px rgba(255,235,120,.65);animation:firefly 7s ease-in-out infinite alternate}
+@keyframes firefly{0%{transform:translate3d(0,0,0);opacity:.15}30%{opacity:.95}60%{transform:translate3d(26px,-40px,0);opacity:.4}100%{transform:translate3d(-18px,-80px,0);opacity:.9}}
+#bg[data-season=summer] .bl1{fill:#6fcf7f}#bg[data-season=summer] .bl2{fill:#b5f0a8}
+/* иероглифы: вертикально в углу плитки и рядом с заголовком экрана */
+.tile em.tkj{position:absolute;top:12px;right:12px;z-index:2;writing-mode:vertical-rl;font-style:normal;font-size:17px;line-height:1.05;letter-spacing:.06em;color:rgba(255,255,255,.62);text-shadow:0 1px 8px rgba(8,2,24,.8)}
+.top .kj{margin-left:auto;font-size:20px;color:rgba(233,214,255,.55);letter-spacing:.08em}
+.hello-row h1 small.jp{display:block;font-size:12px;font-weight:400;letter-spacing:.18em;color:var(--mute);margin-bottom:2px}
+/* печать-ханко «済» (готово) при сохранении */
+.hanko{position:fixed;left:50%;top:42%;z-index:70;width:92px;height:92px;margin:-46px 0 0 -46px;border:4px solid #e2384d;border-radius:14px;color:#e2384d;display:grid;place-items:center;font-size:52px;line-height:1;background:rgba(255,240,240,.08);transform:rotate(-12deg);pointer-events:none;animation:hanko 1.1s cubic-bezier(.2,.8,.2,1) forwards;text-shadow:0 0 1px #e2384d;box-shadow:0 0 0 2px rgba(226,56,77,.25) inset}
+@keyframes hanko{0%{opacity:0;transform:rotate(-12deg) scale(2.2)}18%{opacity:1;transform:rotate(-12deg) scale(.92)}26%{transform:rotate(-12deg) scale(1)}75%{opacity:.95}100%{opacity:0;transform:rotate(-12deg) scale(1)}}
+/* пословица дня: карточка с волнами сэйгайха */
+.kotowaza{position:relative;overflow:hidden;display:flex;gap:14px;align-items:center}
+.kotowaza::after{content:"";position:absolute;inset:auto 0 0 0;height:46px;opacity:.13;pointer-events:none;background-size:40px 20px;
+  background-image:radial-gradient(circle at 50% 100%,transparent 6px,#c9a6ff 7px,transparent 8px,transparent 11px,#c9a6ff 12px,transparent 13px,transparent 16px,#c9a6ff 17px,transparent 18px)}
+.kotowaza .kv{flex:none;writing-mode:vertical-rl;font-size:21px;line-height:1.15;letter-spacing:.1em;color:#f0dcff}
+.kotowaza .kt{flex:1;min-width:0}.kotowaza .kt b{display:block;margin:2px 0 4px;font-weight:600}
+.kotowaza .kt .mute{font-size:13px}
 button.ghost,.seg button:not(.on),.top button,.monthbar button{background:rgba(38,20,78,.9)}
 .sheet button.ghost,.sheet .seg button:not(.on){background:rgba(255,255,255,.07)}
 .hello-row{display:flex;align-items:center;gap:12px;margin-top:66px}
@@ -338,8 +367,8 @@ h1,.top b,.monthbar b,.day{text-shadow:0 1px 8px rgba(8,2,24,.9)}
   <g fill="none" stroke="#0a0420" stroke-width="2"><path d="M300 520v324" stroke-width="7"/><path d="M272 548h56M278 566h44" stroke-width="4"/><path d="M272 548C180 600 90 610-10 590M328 548c20 8 40 12 72 12M278 566C190 630 90 640-10 626"/></g>
   <g transform="translate(-8 -16) scale(.68)">
   <g fill="none" stroke="#6a3a9e" stroke-linecap="round"><path d="M-6 26C40 44 86 40 138 66" stroke-width="7"/><path d="M50 40c12 22 26 34 48 42M92 48c16-10 30-14 48-14" stroke-width="3.5"/></g>
-  <g fill="#f4a9dc"><circle cx="44" cy="30" r="9"/><circle cx="72" cy="50" r="8"/><circle cx="104" cy="48" r="9"/><circle cx="140" cy="66" r="9"/><circle cx="98" cy="84" r="8"/><circle cx="140" cy="34" r="8"/><circle cx="20" cy="42" r="7"/></g>
-  <g fill="#ffdcf1"><circle cx="44" cy="30" r="3.5"/><circle cx="72" cy="50" r="3"/><circle cx="104" cy="48" r="3.5"/><circle cx="140" cy="66" r="3.5"/><circle cx="98" cy="84" r="3"/><circle cx="140" cy="34" r="3"/><circle cx="20" cy="42" r="2.5"/></g>
+  <g class="bl1" fill="#f4a9dc"><circle cx="44" cy="30" r="9"/><circle cx="72" cy="50" r="8"/><circle cx="104" cy="48" r="9"/><circle cx="140" cy="66" r="9"/><circle cx="98" cy="84" r="8"/><circle cx="140" cy="34" r="8"/><circle cx="20" cy="42" r="7"/></g>
+  <g class="bl2" fill="#ffdcf1"><circle cx="44" cy="30" r="3.5"/><circle cx="72" cy="50" r="3"/><circle cx="104" cy="48" r="3.5"/><circle cx="140" cy="66" r="3.5"/><circle cx="98" cy="84" r="3"/><circle cx="140" cy="34" r="3"/><circle cx="20" cy="42" r="2.5"/></g>
   </g>
 </svg>
 <i style="left:6%;animation-duration:15s;animation-delay:-2s"></i><i style="left:22%;animation-duration:19s;animation-delay:-9s"></i><i style="left:38%;animation-duration:17s;animation-delay:-5s"></i><i style="left:55%;animation-duration:21s;animation-delay:-13s"></i><i style="left:70%;animation-duration:16s;animation-delay:-7s"></i><i style="left:86%;animation-duration:20s;animation-delay:-16s"></i>
@@ -787,7 +816,7 @@ function render() {
   let body = '';
   if (S.tab === 'home') body = renderHome();
   else {
-    body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b></div>`;
+    body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b>${KANJI[S.tab] ? `<span class="kj jpf" lang="ja" aria-hidden="true">${KANJI[S.tab]}</span>` : ''}</div>`;
     if (S.tab === 'tx') body += monthBar() + renderTx();
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() + `<button class="ghost full" id="sumopen">📊 Подробные итоги ${MONTH_GEN[S.month.getMonth()]}</button>` : renderLimits());
     else if (S.tab === 'food') body += renderFood();
@@ -862,7 +891,7 @@ function renderHome() {
   const inc = counted().filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
   const exp = counted().filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
-  return `<div class="hello-row"><h1 class="hello">${greeting()}, ${esc(S.me.name)}</h1>
+  return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
     <button class="iconbtn" id="gear" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.75 10.13L20.99 10.03L20.99 13.97L18.75 13.87L18.09 15.45L19.75 16.96L16.96 19.75L15.45 18.09L13.87 18.75L13.97 20.99L10.03 20.99L10.13 18.75L8.55 18.09L7.04 19.75L4.25 16.96L5.91 15.45L5.25 13.87L3.01 13.97L3.01 10.03L5.25 10.13L5.91 8.55L4.25 7.04L7.04 4.25L8.55 5.91L10.13 5.25L10.03 3.01L13.97 3.01L13.87 5.25L15.45 5.91L16.96 4.25L19.75 7.04L18.09 8.55Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
   ${monthBar()}
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
@@ -882,7 +911,8 @@ function renderHome() {
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
     <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${!S.tasksReady ? 'нужно обновить базу' : todayTasks().length ? 'На сегодня: ' + todayTasks().length : openTasks().length ? 'Всего дел: ' + openTasks().length : 'Дел нет'}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
-  </div>`;
+  </div>
+  ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)">/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
 }
 
 function shiftMonth(d) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + d, 1); S._enter = 'sub'; refresh(); }
@@ -1041,6 +1071,9 @@ function renderSettings() {
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне. На iPhone с выключенным звуком (переключатель сбоку) звука не будет.</div></div>
+  <div class="card"><b>Оформление</b> <span class="jpf mute" lang="ja">季節</span>
+    <select id="season">${Object.entries(SEASONS).map(([k, l]) => `<option value="${k}"${k === seasonPick() ? ' selected' : ''}>${esc(l)}${k === 'auto' ? ' (сейчас: ' + SEASONS[seasonNow()].split(':')[0].toLowerCase() + ')' : ''}</option>`).join('')}</select>
+    <div class="mute">Что летит по экрану: весной лепестки сакуры, летом светлячки, осенью листья клёна, зимой снег. Только на этом телефоне.</div></div>
   ${renderAutoImport()}
   <div class="card"><b>Автокатегории</b>
     ${S.rulesReady ? `<div class="mute">Правил: ${S.rules.length}. Операции из банка получают категорию по слову из текста, например «пятёрочка» → Продукты.</div><button class="ghost full" id="rules">Правила</button>`
@@ -1056,6 +1089,7 @@ function bindTab() {
   $('#app').querySelectorAll('.seg button[data-f]').forEach(b => b.onclick = () => { S.filter = b.dataset.f; S._enter = 'sub'; render(); });
   $('#app').querySelectorAll('.seg button[data-ls]').forEach(b => b.onclick = () => { S.limSub = b.dataset.ls; S._enter = 'sub'; render(); });
   if ($('#snd')) $('#snd').onchange = e => { lsSet('fb_sound', e.target.checked); if (e.target.checked) sound('success'); };
+  if ($('#season')) $('#season').onchange = e => { try { localStorage.setItem('fb_season', e.target.value); } catch (x) {} applySeason(); };
   $('#app').querySelectorAll('.ph[data-id]').forEach(el => el.onclick = () => openViewer(el.dataset.id));
   $('#app').querySelectorAll('.goal').forEach(el => el.onclick = () => openGoal(el.dataset.g));
   if ($('#ag')) $('#ag').onclick = () => openGoalForm(null);
@@ -1195,6 +1229,7 @@ function openAdd(pre = {}) {
     if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
     if (pre.onSaved) await pre.onSaved();
     closeSheet();
+    hanko();
     if (rfile) {
       const msg = toast('Загружаем чек…', 0);
       try { await uploadReceipt({ id: row.id, receipt_path: null }, rfile); msg.remove(); }
@@ -3264,7 +3299,7 @@ async function toggleTask(id) {
   if (!t) return;
   const was = { done: t.done, done_at: t.done_at };
   t.done = !t.done; t.done_at = t.done ? new Date().toISOString() : null;
-  if (t.done) sound('success');
+  if (t.done) { sound('success'); hanko(); }
   render();
   const { data, error } = await sb.from('tasks').update({ done: t.done, done_at: t.done_at }).eq('id', id).select();
   if (error || !data || !data.length) {
@@ -3284,6 +3319,80 @@ async function toggleTask(id) {
   }
 }
 
+
+// ---------- японские мотивы ----------
+// иероглифы разделов: на плитках главной и рядом с заголовком экрана
+const KANJI = { tx: '取引', lim: '予算', food: '食料', more: '家族', todo: '予定', photos: '写真', settings: '設定' };
+// японское приветствие по времени суток
+const jpGreeting = () => { const h = new Date().getHours(); return h < 5 ? 'おやすみ' : h < 11 ? 'おはよう' : h < 18 ? 'こんにちは' : 'こんばんは'; };
+// пословица дня: [по-японски, чтение, перевод, смысл]
+const KOTOWAZA = [
+  ['塵も積もれば山となる', 'тири мо цуморэба яма то нару', 'И пылинки, скопившись, становятся горой', 'Мелкие траты и мелкие накопления складываются в большое.'],
+  ['備えあれば憂いなし', 'сонаэ арэба урэи наси', 'Есть запас — нет тревог', 'Подушка безопасности спасает в трудный момент.'],
+  ['安物買いの銭失い', 'ясумоно-каи но дзэни-усинаи', 'Купишь дёшево — потеряешь деньги', 'Скупой платит дважды.'],
+  ['七転び八起き', 'нанакороби яоки', 'Упади семь раз, встань восемь', 'Неудачный месяц — не повод бросать бюджет.'],
+  ['千里の道も一歩から', 'сэнри но мити мо иппо кара', 'Путь в тысячу ри начинается с одного шага', 'Начните откладывать хоть понемногу.'],
+  ['継続は力なり', 'кэйдзоку ва тикара нари', 'Постоянство — это сила', 'Записывать траты каждый день важнее, чем идеально.'],
+  ['急がば回れ', 'исогаба маварэ', 'Спешишь — иди в обход', 'Крупную покупку лучше обдумать, чем взять сгоряча.'],
+  ['石の上にも三年', 'иси но уэ ни мо саннэн', 'И на холодном камне за три года станет тепло', 'Терпение приносит плоды.'],
+  ['腹八分目', 'хара хатибу мэ', 'Ешь до восьми десятых сытости', 'Умеренность во всём, и в покупках тоже.'],
+  ['時は金なり', 'токи ва канэ нари', 'Время — деньги', 'Берегите и то, и другое.'],
+  ['早起きは三文の徳', 'хаяоки ва санмон но току', 'Кто рано встаёт, тому три монеты', 'Ранние дела приносят пользу.'],
+  ['笑う門には福来る', 'варау кадо ни ва фуку китару', 'В дом, где смеются, приходит счастье', 'Хорошее настроение — тоже богатство.'],
+  ['花より団子', 'хана ёри данго', 'Лучше рисовые шарики, чем цветы', 'Полезное важнее красивого.'],
+  ['猿も木から落ちる', 'сару мо ки кара отиру', 'И обезьяна падает с дерева', 'Ошибиться может каждый — главное заметить и поправить.'],
+  ['雨降って地固まる', 'амэ футтэ дзи катамару', 'После дождя земля твердеет', 'Трудности делают семью крепче.'],
+  ['足るを知る者は富む', 'тару о сиру моно ва тому', 'Кто знает меру, тот богат', 'Богатство — это когда хватает.'],
+  ['金は天下の回り物', 'канэ ва тэнка но маваримоно', 'Деньги ходят по кругу', 'Не жалейте о потраченном с толком: деньги вернутся.'],
+  ['案ずるより産むが易し', 'андзуру ёри уму га ясуси', 'Сделать легче, чем бояться', 'Начать вести бюджет проще, чем кажется.'],
+  ['一期一会', 'итиго итиэ', 'Одна встреча — один раз в жизни', 'Цените время вместе.'],
+  ['十人十色', 'дзюнин тоиро', 'Десять человек — десять цветов', 'У каждого свои траты, и это нормально.']];
+const kotowazaToday = () => { const d = new Date(), y0 = new Date(d.getFullYear(), 0, 0); return KOTOWAZA[Math.floor((d - y0) / 864e5) % KOTOWAZA.length]; };
+function renderKotowaza() {
+  const [jp, read, ru, mean] = kotowazaToday();
+  return `<div class="card kotowaza"><div class="kv jpf" lang="ja">${esc(jp)}</div><div class="kt"><div class="mute">Пословица дня · ${esc(read)}</div><b>«${esc(ru)}»</b><div class="mute">${esc(mean)}</div></div></div>`;
+}
+// красная печать «済» (готово)
+function hanko(ch = '済') {
+  if (!calm()) return;
+  const el = document.createElement('div');
+  el.className = 'hanko jpf'; el.textContent = ch; el.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+// время года: auto — по месяцу; или выбранное в настройках
+const SEASONS = { auto: 'По времени года', spring: 'Весна: сакура', summer: 'Лето: светлячки', autumn: 'Осень: клён', winter: 'Зима: снег' };
+const seasonNow = () => { const m = new Date().getMonth(); return m >= 2 && m <= 4 ? 'spring' : m >= 5 && m <= 7 ? 'summer' : m >= 8 && m <= 10 ? 'autumn' : 'winter'; };
+const seasonPick = () => { let s = null; try { s = localStorage.getItem('fb_season'); } catch (e) {} return SEASONS[s] ? s : 'auto'; };
+function applySeason() {
+  const bg = document.getElementById('bg');
+  if (!bg) return;
+  const s = seasonPick() === 'auto' ? seasonNow() : seasonPick();
+  if (bg.dataset.season === s) return;
+  bg.dataset.season = s;
+  bg.querySelectorAll('i').forEach(i => i.remove());
+  const n = { spring: 7, summer: 12, autumn: 8, winter: 22 }[s];
+  const leaf = ['#ff7a45', '#ff5a3c', '#ffb347', '#e8433a', '#ff9147'];
+  let html = '';
+  for (let k = 0; k < n; k++) {
+    const left = Math.round((k + .5) / n * 100 + (k % 2 ? 3 : -3));
+    const dur = s === 'winter' ? 11 + (k * 7) % 9 : s === 'summer' ? 5 + (k * 3) % 6 : 15 + (k * 5) % 8;
+    const extra = s === 'autumn' ? `--lc:${leaf[k % leaf.length]};` : s === 'summer' ? `--fb:${12 + (k * 13) % 30}%;` : s === 'winter' ? `width:${3 + k % 4}px;height:${3 + k % 4}px;` : '';
+    html += `<i style="left:${left}%;animation-duration:${dur}s;animation-delay:-${(k * 2.3).toFixed(1)}s;${extra}"></i>`;
+  }
+  bg.insertAdjacentHTML('beforeend', html);
+}
+// кисточный шрифт для иероглифов (только нужные знаки, поэтому файл крошечный); без связи — обычный шрифт
+function loadBrushFont() {
+  try {
+    const chars = [...new Set([...Object.values(KANJI), ...KOTOWAZA.map(k => k[0]), '済', 'おやすみ', 'おはよう', 'こんにちは', 'こんばんは'].join(''))].join('');
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap&text=' + encodeURIComponent(chars);
+    document.head.appendChild(l);
+  } catch (e) {}
+}
+try { applySeason(); loadBrushFont(); } catch (e) {}
 
 // ---------- итоги месяца ----------
 // Уведомление приходит 1-го числа (функция push-digest, режим month); по нажатию открывается этот разбор.
