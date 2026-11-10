@@ -186,6 +186,16 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .t3{background:linear-gradient(145deg,#6366f1,#312e81)}
 .t4{background:linear-gradient(145deg,#ec4899,#6b21a8)}
 .t5{background:linear-gradient(135deg,#7c3aed,#c026d3 70%,#ec4899)}
+.trip{background:linear-gradient(135deg,rgba(14,165,233,.28),rgba(139,92,246,.32) 55%,rgba(236,72,153,.3));border-color:rgba(125,211,252,.35);overflow:hidden}
+.triphead{display:flex;align-items:center;gap:12px}
+.triphead b{display:block;font:600 17px/1.2 "Unbounded","Golos Text",sans-serif}
+.triphead .mute{font-size:13px}
+.tripic{font-size:30px;line-height:1;animation:bob 3s ease-in-out infinite}
+.tripkj{margin-left:auto;font-size:30px;opacity:.35;line-height:1}
+.tripcd{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.tripcd>div{background:rgba(18,11,36,.45);border:1px solid var(--line);border-radius:14px;padding:8px 4px;text-align:center;min-width:0}
+.tripcd b{display:block;font:700 24px/1.1 "Unbounded","Golos Text",sans-serif;font-variant-numeric:tabular-nums}
+.tripcd span{display:block;font-size:11.5px;color:var(--mute);margin-top:3px}
 .t7{background:linear-gradient(135deg,#312e81,#6d28d9 60%,#c026d3)}
 .fchat{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;padding:4px 0 10px;min-height:calc(100vh - 190px);min-height:calc(100dvh - 190px)}
 .fday{align-self:center;font-size:12px;color:var(--mute);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:3px 10px;margin:8px 0 2px}
@@ -894,6 +904,7 @@ function render() {
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
   if (S.tab === 'home' && !isRel()) countUp();
+  if (S.tab === 'home' && !isRel()) tickTrip();
   if (S.tab === 'chat') bindFam();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
@@ -949,12 +960,44 @@ const counted = (list = S.tx) => list.filter(t => !t.excluded);
 
 const GEAR_BTN = `<button class="iconbtn" id="gear" aria-label="Настройки" title="Настройки"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.75 10.13L20.99 10.03L20.99 13.97L18.75 13.87L18.09 15.45L19.75 16.96L16.96 19.75L15.45 18.09L13.87 18.75L13.97 20.99L10.03 20.99L10.13 18.75L8.55 18.09L7.04 19.75L4.25 16.96L5.91 15.45L5.25 13.87L3.01 13.97L3.01 10.03L5.25 10.13L5.91 8.55L4.25 7.04L7.04 4.25L8.55 5.91L10.13 5.25L10.03 3.01L13.97 3.01L13.87 5.25L15.45 5.91L16.96 4.25L19.75 7.04L18.09 8.55Z"/><circle cx="12" cy="12" r="3"/></svg></button>`;
 
+// ---------- отсчёт до отпуска ----------
+// время вылета московское; после вылета карточка не показывается (сама пропадает с экрана в момент вылета)
+const TRIP = { title: 'Вылет в Тайланд', at: '2026-11-26T12:25:00+03:00' };
+const tripLeft = () => Date.parse(TRIP.at) - Date.now();
+const plural = (k, a, b, c) => { const m = k % 100, d = k % 10; return m > 10 && m < 20 ? c : d === 1 ? a : d >= 2 && d <= 4 ? b : c; };
+function tripParts(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [[Math.floor(s / 86400), 'день', 'дня', 'дней'], [Math.floor(s / 3600) % 24, 'час', 'часа', 'часов'],
+    [Math.floor(s / 60) % 60, 'минута', 'минуты', 'минут'], [s % 60, 'секунда', 'секунды', 'секунд']];
+}
+const tripCells = ms => tripParts(ms).map(([v, a, b, c], i) => `<div><b>${i ? pad(v) : v}</b><span>${plural(v, a, b, c)}</span></div>`).join('');
+function renderTrip() {
+  const left = tripLeft();
+  if (!(left > 0)) return '';
+  const when = new Date(TRIP.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }).replace(',', ' в');
+  return `<div class="card trip" id="trip"><div class="triphead"><span class="tripic" aria-hidden="true">✈️</span><div><b>${esc(TRIP.title)}</b><span class="mute">${esc(when)}</span></div><span class="jpf tripkj" lang="ja" aria-hidden="true">旅</span></div>
+    <div class="tripcd" id="tripcd">${tripCells(left)}</div></div>`;
+}
+let tripTimer = null;
+function tickTrip() {
+  if (tripTimer) { clearInterval(tripTimer); tripTimer = null; }
+  if (!$('#tripcd') || typeof setInterval !== 'function') return;
+  tripTimer = setInterval(() => {
+    const el = document.getElementById('tripcd');
+    if (!el) { clearInterval(tripTimer); tripTimer = null; return; }
+    const left = tripLeft();
+    if (left <= 0) { clearInterval(tripTimer); tripTimer = null; burst(40); render(); return; }   // вылетели: карточка уходит
+    el.innerHTML = tripCells(left);
+  }, 1000);
+}
+
 function renderHome() {
   const inc = counted().filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
   const exp = counted().filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
   const limits = S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).length;
   return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
     ${GEAR_BTN}</div>
+  ${renderTrip()}
   ${monthBar()}
   <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
