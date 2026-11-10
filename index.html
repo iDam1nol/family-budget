@@ -92,6 +92,27 @@ button.micbig.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite
 @keyframes micpulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,.6)}100%{box-shadow:0 0 0 26px rgba(248,113,113,0)}}
 .center{text-align:center}
 .vcard{margin-top:10px;display:grid;gap:6px}
+/* чат помощника */
+.vchat{max-height:56vh;min-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:8px;padding:6px 2px;margin:6px 0}
+.msg{max-width:86%;padding:10px 13px;border-radius:18px;line-height:1.45;font-size:15px;overflow-wrap:anywhere}
+.msg.me{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:6px}
+.msg.ai{align-self:flex-start;background:var(--solid);border:1px solid var(--line);border-bottom-left-radius:6px}
+.msg.ai.bad{border-color:rgba(251,113,133,.5)}
+.msg .vok,.msg .err{font-size:14px;margin-top:6px;min-height:0}
+.msg .vsrc{font-size:12px;color:var(--mute);margin-top:6px}
+.msg .vsrc a{color:var(--brand)}
+.msg .vundo{padding:6px 0 0;font-size:14px}
+.vhint{margin:auto 0;line-height:1.6;padding:12px 6px}
+.vbar{display:flex;gap:8px;align-items:flex-end}
+.vbar textarea{flex:1;min-width:0;margin:0;resize:none;max-height:120px;font:inherit}
+.vbar>button{flex:none;width:50px;height:50px;padding:0;border-radius:50%}
+button.micsm{display:grid;place-items:center;background:rgba(38,20,78,.92);border:1px solid var(--line)}
+button.micsm svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
+.dots{display:inline-flex;gap:4px;padding:4px 0}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--mute);animation:dot 1.2s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 .vok{color:var(--good)}
 .vreply{font-size:16px;line-height:1.45}
 .empty{text-align:center;color:var(--mute);padding:26px 8px}
@@ -3217,20 +3238,80 @@ async function voiceRun(actions) {
   return done;
 }
 
+// ---- переписка с помощником: хранится на телефоне сутки, кнопки «Отменить» — только пока окно открыто ----
+const CHAT_TTL = 24 * 3600e3;
+function chatLoad() {
+  const c = lsGet('fb_chat');
+  S.chat = c && Array.isArray(c.m) && Date.now() - c.at < CHAT_TTL ? c.m.filter(m => !m.pending) : [];
+  S.chatUndo = S.chatUndo || {};
+}
+const chatSave = () => lsSet('fb_chat', { at: Date.now(), m: S.chat.filter(m => !m.pending).slice(-40) });
+// ответ модели -> безопасный HTML: переносы строк, пункты «- » как «•»
+// модель иногда склеивает пункты в строку («…так.- Обжарь…»): разносим их по строкам
+const replyHtml = t => esc(String(t || '').replace(/([.!?:;)])\s*-\s+(?=[А-ЯЁA-Z0-9])/g, '$1\n- '))
+  .split('\n').map(l => l.replace(/^\s*[-*•]\s+/, '• ')).join('<br>');
+function chatHtml() {
+  if (!S.chat.length) return `<div class="mute center vhint">Спросите что угодно или попросите что-то записать. Например:<br>«Что приготовить из курицы и риса?»<br>«Сколько ушло на кафе в октябре?»<br>«Купить молоко и хлеб»<br>«Завтра в 18:00 забрать посылку»</div>`;
+  return S.chat.map(m => m.role === 'user' ? `<div class="msg me">${esc(m.text)}</div>`
+    : `<div class="msg ai${m.bad ? ' bad' : ''}">${m.pending ? '<span class="dots"><i></i><i></i><i></i></span>' : replyHtml(m.text)}
+      ${(m.done || []).map(d => `<div class="${d.bad ? 'err' : 'vok'}">${d.bad ? '' : '✓ '}${esc(d.text)}</div>`).join('')}
+      ${m.sources && m.sources.length ? `<div class="vsrc">Источники: ${m.sources.map(s => `<a href="${esc(s.uri)}" target="_blank" rel="noopener">${esc(s.title)}</a>`).join(' · ')}</div>` : ''}
+      ${S.chatUndo[m.id] ? `<button class="link vundo" data-vundo="${m.id}">Отменить</button>` : ''}</div>`).join('');
+}
+function chatDraw() {
+  const box = $('#vchat');
+  if (!box) return;
+  box.innerHTML = chatHtml();
+  box.querySelectorAll && box.querySelectorAll('[data-vundo]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.vundo, list = S.chatUndo[id] || [];
+    delete S.chatUndo[id];
+    b.disabled = true;
+    for (const u of list.slice().reverse()) { try { await u(); } catch (e) {} }
+    const m = S.chat.find(x => x.id === id);
+    if (m) { m.done = (m.done || []).map(d => ({ ...d, text: d.bad ? d.text : d.text + ' — отменено', bad: true })); chatSave(); }
+    chatDraw(); refresh();
+  });
+  box.scrollTop = 1e9;
+}
+
 function openVoice() {
   const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
-  sheet(`<b>Помощник</b>
-    ${canRec ? `<button class="micbig" id="vrec" aria-label="Говорить">${MIC_SVG}</button>` : ''}
-    <div class="mute center" id="vst">${canRec ? 'Нажмите и скажите, например: «Потратил 450 на продукты», «Купить молоко и хлеб» или «Завтра в 18:00 забрать посылку». Нажмите ещё раз, когда закончите.'
-      : 'Запись голоса здесь недоступна. Напишите или продиктуйте с клавиатуры (значок микрофона на ней).'}</div>
-    <div class="row" style="gap:8px"><input id="vtx" placeholder="${canRec ? 'или напишите…' : 'Например: купить молоко и хлеб'}" maxlength="600" style="flex:1"><button id="vgo" style="width:56px">→</button></div>
-    <div id="vres"></div>
+  chatLoad();
+  sheet(`<div class="row"><b>Помощник</b><button class="link" id="vnew" style="padding:4px 0">Новый разговор</button></div>
+    <div class="vchat" id="vchat"></div>
+    <div class="mute center" id="vst">${canRec ? '' : 'Запись голоса здесь недоступна: продиктуйте с клавиатуры (значок микрофона на ней) или напишите.'}</div>
+    <div class="vbar">${canRec ? `<button class="micsm" id="vrec" aria-label="Говорить">${MIC_SVG}</button>` : ''}
+      <textarea id="vtx" rows="1" placeholder="Спросите или попросите…" maxlength="2000"></textarea><button id="vgo" aria-label="Отправить">→</button></div>
     <button class="link full" id="cl">Закрыть</button>`);
+  chatDraw();
   $('#cl').onclick = closeSheet;
+  $('#vnew').onclick = () => { S.chat = []; S.chatUndo = {}; chatSave(); chatDraw(); };
   if ($('#vrec')) $('#vrec').onclick = () => rec ? stopRec(false) : startRec();
-  const go = () => { const v = $('#vtx').value.trim(); if (v) voiceSend({ text: v }); };
+  const go = () => { const v = $('#vtx').value.trim(); if (v && !S.voiceBusy) { $('#vtx').value = ''; voiceSend({ text: v }); } };
   $('#vgo').onclick = go;
-  $('#vtx').onkeydown = e => { if (e.key === 'Enter') go(); };
+  $('#vtx').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { if (e.preventDefault) e.preventDefault(); go(); } };
+}
+
+// траты по месяцам за год и крупные покупки: для вопросов «сравни», «где сэкономить» (загружаем раз на обновление данных)
+async function yearStats() {
+  if (S.yearStats && S.yearStats.ver === S.dataVer) return S.yearStats.data;
+  const d = new Date(), from = new Date(d.getFullYear() - 1, d.getMonth() + 1, 1).toLocaleDateString('sv');
+  const { data, error } = await sb.from('transactions').select('date,kind,amount,category_id,excluded,note').gte('date', from).order('date', { ascending: false }).limit(5000);
+  if (error || !Array.isArray(data)) return null;
+  const cname = id => (S.cats.find(c => c.id === id) || {}).name || 'Без категории';
+  const months = {};
+  const list = data.filter(t => !t.excluded);
+  list.forEach(t => {
+    const m = String(t.date).slice(0, 7), o = months[m] || (months[m] = { 'Расход': 0, 'Доход': 0, 'По категориям': {} });
+    if (t.kind === 'income') o['Доход'] += +t.amount;
+    else { o['Расход'] += +t.amount; const n = cname(t.category_id); o['По категориям'][n] = (o['По категориям'][n] || 0) + +t.amount; }
+  });
+  Object.values(months).forEach(o => { o['Расход'] = Math.round(o['Расход']); o['Доход'] = Math.round(o['Доход']); Object.keys(o['По категориям']).forEach(k => o['По категориям'][k] = Math.round(o['По категориям'][k])); });
+  const top = list.filter(t => t.kind === 'expense').sort((a, b) => b.amount - a.amount).slice(0, 25)
+    .map(t => [t.date, Math.round(+t.amount), cname(t.category_id), t.note || ''].join(' ').trim());
+  const out = { months, top };
+  S.yearStats = { ver: S.dataVer, data: out };
+  return out;
 }
 
 const vstatus = t => { const el = $('#vst'); if (el) el.textContent = t; };
@@ -3284,43 +3365,51 @@ async function voiceErr(error) {
   }[code] || (isNetErr(error) ? 'Нет связи с сервером.' : /not found|404/i.test(String(error.message)) ? 'Функция помощника ещё не установлена.' : 'Помощник не ответил. Попробуйте ещё раз.');
 }
 
+// что помощник «помнит» из разговора: текст реплик и что было сделано
+const chatHistory = () => S.chat.filter(m => !m.pending && !m.bad).slice(-12).map(m => ({
+  role: m.role, text: m.text + ((m.done || []).length ? '\n[Сделано в приложении: ' + m.done.map(d => d.text).join('; ') + ']' : '') }));
+
 async function voiceSend(payload) {
   if (S.voiceBusy) return;
+  if (!S.chat) chatLoad();
   S.voiceBusy = true;
-  vstatus('Разбираю…');
+  vstatus('');
   if ($('#vgo')) $('#vgo').disabled = true;
+  const history = chatHistory();
+  const uid = 'u' + Date.now(), aid = 'a' + Date.now();
+  const user = { id: uid, role: 'user', text: payload.text || '🎤 Голосовое сообщение' };
+  const ai = { id: aid, role: 'model', text: '', pending: true };
+  S.chat.push(user, ai); chatDraw();
+
   let res = null, why = '';
   try {
-    const { data, error } = await sb.functions.invoke(VOICE_FN, { body: { ...payload, ctx: voiceCtx() } });
+    const ctx = voiceCtx();
+    const ys = await yearStats().catch(() => null);
+    if (ys) { ctx['Помесячно за год'] = ys.months; ctx['Крупные траты за год'] = ys.top; }
+    const { data, error } = await sb.functions.invoke(VOICE_FN, { body: { ...payload, history, ctx } });
     if (error) why = await voiceErr(error); else res = data;
   } catch (e) { why = 'Помощник не ответил. Попробуйте ещё раз.'; }
-  // помощник недоступен, но есть текст: пробуем разобрать сами
+  // помощник недоступен, но есть текст: простые команды разбираем сами
   if (!res && payload.text) {
     const local = voiceLocal(payload.text);
-    if (local.length) res = { transcript: payload.text, actions: local, reply: '', local: true };
+    if (local.length) res = { transcript: payload.text, actions: local, reply: 'Помощник сейчас недоступен (' + why.replace(/\.$/, '').toLowerCase() + '), но эту команду я понял сам.', local: true };
+  }
+  ai.pending = false;
+  if (!res) { ai.text = why; ai.bad = true; }
+  else {
+    if (!payload.text && res.transcript) user.text = '🎤 ' + res.transcript;
+    const actions = voiceClean(res.actions);
+    const done = actions.length ? await voiceRun(actions) : [];
+    ai.text = res.reply || (done.length ? '' : 'Не понял. Скажите или напишите по-другому.');
+    ai.done = done.map(d => ({ text: d.text, bad: !!d.bad }));
+    ai.sources = Array.isArray(res.sources) ? res.sources.slice(0, 4) : [];
+    const undo = done.filter(d => d.undo).map(d => d.undo);
+    if (undo.length) S.chatUndo[aid] = undo;
+    if (done.some(d => !d.bad)) { sound('success'); refresh(); }
   }
   S.voiceBusy = false;
   if ($('#vgo')) $('#vgo').disabled = false;
-  if (!$('#vres')) return;
-  if (!res) { vstatus(why); return; }
-  const actions = voiceClean(res.actions);
-  vstatus(res.local ? 'Помощник недоступен (' + why.replace(/\.$/, '') + '), разобрал сам.' : 'Готово. Можно сказать ещё.');
-  const done = actions.length ? await voiceRun(actions) : [];
-  if (done.some(d => !d.bad)) { sound('success'); refresh(); }
-  if ($('#vtx') && payload.text) $('#vtx').value = '';
-  const undo = done.filter(d => d.undo);
-  $('#vres').innerHTML = `<div class="card vcard">
-      ${res.transcript ? `<div class="mute">«${esc(res.transcript)}»</div>` : ''}
-      ${done.map(d => `<div class="${d.bad ? 'err' : 'vok'}">${d.bad ? '' : '✓ '}${esc(d.text)}</div>`).join('')}
-      ${res.reply ? `<div class="vreply">${esc(res.reply)}</div>` : ''}
-      ${!done.length && !res.reply ? '<div class="mute">Не понял, что сделать. Скажите по-другому.</div>' : ''}
-      ${undo.length ? `<button class="ghost full" id="vundo">Отменить${undo.length > 1 ? ' всё' : ''}</button>` : ''}</div>`;
-  if ($('#vundo')) $('#vundo').onclick = async () => {
-    $('#vundo').disabled = true;
-    for (const d of undo.reverse()) { try { await d.undo(); } catch (e) {} }
-    $('#vres').innerHTML = '<div class="mute center">Отменено.</div>';
-    refresh();
-  };
+  chatSave(); chatDraw();
 }
 
 // ---------- push-уведомления ----------
