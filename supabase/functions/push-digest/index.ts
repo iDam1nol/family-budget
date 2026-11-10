@@ -2,6 +2,7 @@
 // Вызывается двумя способами:
 //  1) по расписанию (update-14.sql) с заголовком x-cron-secret: сводка всем включённым телефонам;
 //     с телом {"mode":"remind"} (update-16.sql, раз в 5 минут) — напоминания о делах за час;
+//     с телом {"mode":"month"} (update-17.sql, 1-го числа) — итоги прошедшего месяца;
 //  2) кнопкой «Прислать проверочное» в приложении (вход пользователя): только на его телефоны.
 // Нужные секреты функции (Edge Functions -> Secrets): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET.
 // Проверку JWT в настройках функции нужно выключить: функция проверяет вход сама.
@@ -71,6 +72,35 @@ function remindMsg(t, now) {
   const when = mins >= 55 ? 'Через час' : mins <= 1 ? 'Сейчас' : 'Через ' + mins + ' мин';
   return { title: when + ': ' + t.title, body: 'Дело на ' + String(t.due_time).slice(0, 5), tag: 'task-' + t.id };
 }
+
+// итоги месяца (1-го числа): ym — 'YYYY-MM' прошедшего месяца
+const MONTH_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MONTH_PREP = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
+const ymShift = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+// d: { ym, tx (за этот и прошлый месяц), cats } -> { title, body, tag, url } или null, если трат не было
+function buildMonth(d) {
+  const ym = d.ym, prev = ymShift(ym, -1), mi = +ym.slice(5) - 1, pi = +prev.slice(5) - 1;
+  const tx = (d.tx || []).filter(t => !t.excluded);
+  const sum = (k, m) => tx.filter(t => t.kind === k && String(t.date).slice(0, 7) === m).reduce((s, t) => s + +t.amount, 0);
+  const exp = sum('expense', ym), inc = sum('income', ym), pexp = sum('expense', prev);
+  if (!exp && !inc) return null;
+  const lines = [];
+  let l1 = 'Расходы ' + rub(exp);
+  if (pexp > 0) {
+    const pc = Math.round((exp - pexp) / pexp * 100);
+    l1 += pc === 0 ? ', как в ' + MONTH_PREP[pi] : pc < 0 ? ' — на ' + (-pc) + '% меньше, чем в ' + MONTH_PREP[pi] : ' — на ' + pc + '% больше, чем в ' + MONTH_PREP[pi];
+  }
+  lines.push(l1 + '.' + (inc ? ' Доходы ' + rub(inc) + ', ' + (inc >= exp ? 'осталось ' + rub(inc - exp) : 'не хватило ' + rub(exp - inc)) + '.' : ''));
+  const byCat = {};
+  tx.filter(t => t.kind === 'expense' && String(t.date).slice(0, 7) === ym).forEach(t => { byCat[t.category_id || ''] = (byCat[t.category_id || ''] || 0) + +t.amount; });
+  const cname = id => ((d.cats || []).find(c => c.id === id) || {}).name || 'Без категории';
+  const top = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (top.length) lines.push('Больше всего: ' + top.map(([id, v]) => cname(id) + ' ' + rub(v)).join(', ') + '.');
+  const over = (d.cats || []).filter(c => c.kind === 'expense' && +c.monthly_limit > 0 && (byCat[c.id] || 0) > +c.monthly_limit);
+  if (over.length) lines.push('Превышен лимит: ' + over.map(c => c.name + ' (+' + rub(byCat[c.id] - +c.monthly_limit) + ')').join(', ') + '.');
+  else if ((d.cats || []).some(c => c.kind === 'expense' && +c.monthly_limit > 0)) lines.push('Все лимиты соблюдены 👍');
+  return { title: 'Итоги ' + MONTH_GEN[mi], body: lines.join('\n'), tag: 'month-' + ym, url: './?itogi=' + ym };
+}
 // --- digest:end ---
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -102,6 +132,37 @@ Deno.serve(async (req: Request) => {
   // режим «напоминание о деле за час» (расписание update-16.sql, раз в 5 минут)
   let body: any = {};
   try { body = await req.json(); } catch (_) { /* пустое тело — обычная сводка */ }
+
+  // режим «итоги месяца» (расписание update-17.sql, 1-го числа в 10:00 по Москве).
+  // ym — какой месяц подвести (по умолчанию прошедший), dry — только показать текст, ничего не отправляя
+  if (cron && body && body.mode === 'month') {
+    const thisYm = new Date().toLocaleDateString('sv', { timeZone: 'Europe/Moscow' }).slice(0, 7);
+    const ym = /^\d{4}-\d{2}$/.test(body.ym || '') ? body.ym : ymShift(thisYm, -1);
+    const { data: subs, error: se } = await db.from('push_subscriptions').select('*');
+    if (se) return json({ error: se.message }, 500);
+    const byHh = new Map<string, any[]>();
+    (subs || []).forEach((s: any) => byHh.set(s.household_id, [...(byHh.get(s.household_id) || []), s]));
+    let sent = 0, removed = 0;
+    const preview: any[] = [];
+    for (const [hh, list] of byHh) {
+      const [{ data: tx }, { data: cats }] = await Promise.all([
+        db.from('transactions').select('kind,amount,date,category_id,excluded').eq('household_id', hh).gte('date', ymShift(ym, -1) + '-01').lt('date', ymShift(ym, 1) + '-01'),
+        db.from('categories').select('*').eq('household_id', hh)]);
+      const msg = buildMonth({ ym, tx: tx || [], cats: cats || [] });
+      if (!msg) continue;
+      if (body.dry) { preview.push(msg); continue; }
+      for (const s of list) {
+        try {
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(msg), { TTL: 24 * 3600 });
+          sent++;
+        } catch (e: any) {
+          if (e && (e.statusCode === 404 || e.statusCode === 410)) { await db.from('push_subscriptions').delete().eq('id', s.id); removed++; }
+        }
+      }
+    }
+    return json({ ym, sent, removed, ...(body.dry ? { preview } : {}) });
+  }
+
   if (cron && body && body.mode === 'remind') {
     const now = Date.now();
     const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);

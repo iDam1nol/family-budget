@@ -79,6 +79,22 @@ nav button.on{color:var(--brand)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .big{font:700 28px/1.2 "Unbounded","Golos Text",sans-serif;letter-spacing:-.02em}
 .err{color:var(--bad);font-size:14px;min-height:20px}
+/* итоги месяца */
+.sumtop{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.sumtop>div{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:16px;padding:12px}
+.sumtop b{display:block;font-size:20px;margin:2px 0 6px;white-space:nowrap}
+.sumrow .row{gap:10px}.sumrow .row>span:last-child{flex:none;white-space:nowrap}
+.chip{display:inline-block;font-size:12px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.08)}
+.chip.up,.sumrow .up{color:var(--bad)}.chip.down,.sumrow .down{color:var(--good)}
+.chip.up{background:rgba(251,113,133,.12)}.chip.down{background:rgba(110,231,183,.12)}
+.sumrow .up,.sumrow .down{font-size:13px}
+.sumwarn{padding:10px 12px;border-radius:14px;background:rgba(251,113,133,.12);color:#ffd5dc;font-size:14px}
+.sumok{padding:10px 12px;border-radius:14px;background:rgba(110,231,183,.1);font-size:14px}
+.sumh{font-weight:700;margin:16px 0 6px}
+.sumrow{padding:7px 0}.sumrow .bar{margin-top:5px}
+.sumtx{padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;gap:10px}.sumtx span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.sumcard{display:flex;align-items:center;gap:12px;width:100%;text-align:left;color:var(--ink);font-weight:400}
+button.sumcard b{display:block}.sumcard .sumic{font-size:28px}.sumcard>span:nth-child(2){flex:1}
 /* поиск по операциям */
 .search{display:flex;gap:8px;align-items:center;margin:10px 0 0}
 .search input{flex:1;min-width:0;margin:0}
@@ -381,7 +397,7 @@ async function load() {
   const { data: h } = await sb.from('households').select('*').limit(1).single();
   S.household = h;
   await refresh();
-  if (!S.booted) { S.booted = true; subscribe(); }
+  if (!S.booted) { S.booted = true; subscribe(); openFromLaunch(); }
 }
 
 // ---------- офлайн: снимок данных и очередь новых операций ----------
@@ -765,7 +781,7 @@ function render() {
   else {
     body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b></div>`;
     if (S.tab === 'tx') body += monthBar() + renderTx();
-    else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() : renderLimits());
+    else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() + `<button class="ghost full" id="sumopen">📊 Подробные итоги ${MONTH_GEN[S.month.getMonth()]}</button>` : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
     else if (S.tab === 'settings') body += renderSettings();
@@ -787,6 +803,8 @@ function render() {
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
   if (S.tab === 'settings') hydratePush();
   if ($('#gear')) $('#gear').onclick = () => go('settings');
+  if ($('#sumcard')) $('#sumcard').onclick = () => openSummary(ymAdd(ymNow(), -1));
+  if ($('#sumopen')) $('#sumopen').onclick = () => openSummary(S.month.getFullYear() + '-' + pad(S.month.getMonth() + 1));
   $('#app').querySelectorAll('.tile').forEach(b => b.onclick = () => go(b.dataset.t));
   bindTab();
 }
@@ -847,6 +865,7 @@ function renderHome() {
     : '<div class="mute" style="grid-column:1/-1">Перенос остатка включится после выполнения update-4.sql</div>'}
   ${savedMonth() ? `<div class="mute" style="grid-column:1/-1">Отложено на цели в этом месяце: <b>${fmt(savedMonth())}</b></div>` : ''}</div>
   ${renderPace(inc, exp)}
+  ${renderSummaryCard()}
   ${renderGapCard()}
   <div class="grid">
     <button class="tile t1" data-t="tx">${ICONS.tx}<div><b>Операции</b><span>Записей: ${S.tx.length}</span></div></button>
@@ -3137,6 +3156,91 @@ async function toggleTask(id) {
   }
 }
 
+
+// ---------- итоги месяца ----------
+// Уведомление приходит 1-го числа (функция push-digest, режим month); по нажатию открывается этот разбор.
+const MONTH_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MONTH_PREP = ['январе', 'феврале', 'марте', 'апреле', 'мае', 'июне', 'июле', 'августе', 'сентябре', 'октябре', 'ноябре', 'декабре'];
+const MONTH_NOM = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const MONTH_DAT = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню', 'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю'];
+const MONTH_INS = ['январём', 'февралём', 'мартом', 'апрелем', 'маем', 'июнем', 'июлем', 'августом', 'сентябрём', 'октябрём', 'ноябрём', 'декабрём'];
+const ymAdd = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
+const ymNow = () => today().slice(0, 7);
+
+// расчёт итогов: tx — операции за этот и прошлый месяц
+function summaryData(ym, tx, cats) {
+  const prev = ymAdd(ym, -1), list = (tx || []).filter(t => !t.excluded);
+  const of = (k, m) => list.filter(t => t.kind === k && String(t.date).slice(0, 7) === m);
+  const total = a => a.reduce((s, t) => s + +t.amount, 0);
+  const exp = of('expense', ym), pexp = of('expense', prev);
+  const by = (a) => { const o = {}; a.forEach(t => { o[t.category_id || ''] = (o[t.category_id || ''] || 0) + +t.amount; }); return o; };
+  const cur = by(exp), old = by(pexp);
+  const cat = id => (cats || []).find(c => c.id === id);
+  const rows = Object.keys({ ...cur, ...old }).map(id => ({ id, name: cat(id) ? cat(id).name : 'Без категории', sum: cur[id] || 0, prev: old[id] || 0,
+    limit: cat(id) && +cat(id).monthly_limit > 0 ? +cat(id).monthly_limit : 0 })).filter(r => r.sum > 0).sort((a, b) => b.sum - a.sum);
+  const e = total(exp), pe = total(pexp), inc = total(of('income', ym));
+  return { ym, exp: e, prevExp: pe, inc, left: inc - e, diffPct: pe > 0 ? Math.round((e - pe) / pe * 100) : null, rows,
+    over: rows.filter(r => r.limit && r.sum > r.limit), top: exp.slice().sort((a, b) => b.amount - a.amount).slice(0, 5), count: exp.length };
+}
+
+async function openSummary(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym || '')) return;
+  const mi = +ym.slice(5) - 1, pi = +ymAdd(ym, -1).slice(5) - 1, year = ym.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + ym.slice(0, 4) : '';
+  sheet(`<b>Итоги ${MONTH_GEN[mi]}${year}</b><div id="sumbox"><div class="empty">Считаем…</div></div><button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  const { data, error } = await sb.from('transactions').select('id,kind,amount,date,category_id,excluded,note,user_id')
+    .gte('date', ymAdd(ym, -1) + '-01').lt('date', ymAdd(ym, 1) + '-01').limit(5000);
+  const box = $('#sumbox');
+  if (!box) return;
+  if (error) { box.innerHTML = `<div class="empty">${isNetErr(error) ? 'Итогам нужна связь с сервером.' : esc(error.message)}</div>`; return; }
+  const d = summaryData(ym, data, S.cats);
+  if (!d.exp && !d.inc) { box.innerHTML = '<div class="empty">В этом месяце операций нет.</div>'; return; }
+  const live = ym === ymNow();
+  const max = Math.max(1, ...d.rows.map(r => r.sum));
+  const delta = r => { const v = r.sum - r.prev; return !r.prev ? '<span class="mute">новое</span>' : Math.abs(v) < 1 ? '' : `<span class="${v > 0 ? 'up' : 'down'}">${v > 0 ? '↑' : '↓'} ${fmt(Math.abs(v))}</span>`; };
+  box.innerHTML = `${live ? '<div class="mute">Месяц ещё идёт: цифры на сегодня.</div>' : ''}
+    <div class="sumtop"><div><span class="mute">Расходы</span><b>${fmt(d.exp)}</b>
+      ${d.diffPct === null ? '' : `<span class="chip ${d.diffPct > 0 ? 'up' : 'down'}">${d.diffPct === 0 ? 'как в ' + MONTH_PREP[pi] : (d.diffPct > 0 ? '+' : '−') + Math.abs(d.diffPct) + '% к ' + MONTH_DAT[pi]}</span>`}</div>
+      <div><span class="mute">Доходы</span><b style="color:var(--good)">${fmt(d.inc)}</b>
+      ${d.inc ? `<span class="chip ${d.left >= 0 ? 'down' : 'up'}">${d.left >= 0 ? 'осталось ' + fmt(d.left) : 'не хватило ' + fmt(-d.left)}</span>` : ''}</div></div>
+    ${d.over.length ? `<div class="sumwarn">Превышен лимит: ${d.over.map(r => esc(r.name) + ' на ' + fmt(r.sum - r.limit)).join(', ')}</div>`
+      : S.cats.some(c => c.kind === 'expense' && +c.monthly_limit > 0) ? '<div class="sumok">Все лимиты соблюдены 👍</div>' : ''}
+    <div class="sumh">По категориям <span class="mute">· в сравнении с ${MONTH_INS[pi]}</span></div>
+    ${d.rows.map(r => `<div class="sumrow"><div class="row"><span>${esc(r.name)}</span><span><b>${fmt(r.sum)}</b> ${delta(r)}</span></div>
+      <div class="bar"><i class="${r.limit && r.sum > r.limit ? 'bad' : ''}" style="width:${r.sum / max * 100}%"></i></div></div>`).join('')}
+    ${d.top.length ? `<div class="sumh">Самые крупные траты</div>${d.top.map(t => `<div class="row sumtx"><span>${esc(new Date(t.date + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }))} · ${esc(t.note || ((S.cats.find(c => c.id === t.category_id) || {}).name) || 'Без категории')}</span><b>${fmt(+t.amount)}</b></div>`).join('')}` : ''}
+    <div class="mute" style="margin-top:10px">Трат за месяц: ${d.count}.</div>
+    <button class="full" id="sumai">Спросить помощника, где сэкономить</button>
+    <button class="ghost full" id="sumtx">Операции за ${MONTH_NOM[mi]}</button>`;
+  $('#sumai').onclick = () => { closeSheet(); setTimeout(() => { openVoice(); voiceSend({ text: `Разбери наши траты за ${ym === ymNow() ? 'этот месяц' : MONTH_NOM[mi] + year}: что изменилось по сравнению с прошлым месяцем и где можно сэкономить?` }); }, 220); };
+  $('#sumtx').onclick = () => { closeSheet(); S.month = new Date(+ym.slice(0, 4), mi, 1); S.tab = 'tx'; S._enter = 'fwd'; refresh(); };
+}
+
+// карточка на главной в первую неделю месяца
+function renderSummaryCard() {
+  if (new Date().getDate() > 7 || !isCurMonth()) return '';
+  const ym = ymAdd(ymNow(), -1);
+  return `<button class="card sumcard" id="sumcard"><span class="sumic">📊</span><span><b>Итоги ${MONTH_GEN[+ym.slice(5) - 1]}</b><span class="mute">Сколько потратили, на что и как по сравнению с прошлым месяцем</span></span><span class="mute">›</span></button>`;
+}
+
+// приложение уже открыто, а нажали на уведомление: сервис-воркер присылает его ссылку сюда
+try {
+  if (navigator.serviceWorker && navigator.serviceWorker.addEventListener)
+    navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'open') openFromUrl(e.data.url); });
+} catch (e) {}
+// уведомление «Итоги месяца» открывает приложение со ссылкой ./?itogi=YYYY-MM
+function openFromUrl(url) {
+  let ym = null;
+  try { ym = new URL(url, location.href).searchParams.get('itogi'); } catch (e) {}
+  if (ym) openSummary(ym);
+}
+function openFromLaunch() {
+  const s = location && typeof location.search === 'string' ? location.search : '';
+  const m = s.match(/[?&]itogi=(\d{4}-\d{2})/);
+  if (!m) return;
+  try { history.replaceState(history.state, '', location.pathname); } catch (e) {}
+  openSummary(m[1]);
+}
 
 // ---------- голосовой помощник ----------
 // Запись голоса (или текст) уходит в функцию voice -> Gemini; обратно приходят действия, их выполняем здесь

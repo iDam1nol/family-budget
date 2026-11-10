@@ -1,7 +1,7 @@
 // Сервис-воркер: приложение открывается даже без интернета и при плохой связи.
 // Файлы самого приложения: сначала сеть (чтобы приходили обновления), если она не отвечает 4 секунды, берём сохранённую копию.
 // Данные (proxy.php, supabase.co) никогда не кэшируются: за них отвечает приложение.
-const V = 'fb-v2';
+const V = 'fb-v3';
 const SHELL = ['./', 'index.html', 'manifest.json', 'supabase.js'];
 
 self.addEventListener('install', e => {
@@ -56,6 +56,8 @@ self.addEventListener('notificationclick', e => {
   const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     const open = list.find(c => c.url.startsWith(self.registration.scope) && 'focus' in c);
-    return open ? open.focus() : self.clients.openWindow(url);
+    if (!open) return self.clients.openWindow(url);
+    open.postMessage({ type: 'open', url });      // открытое приложение само покажет нужное (например, итоги месяца)
+    return open.focus();
   }));
 });
