@@ -275,13 +275,14 @@ const today = () => new Date().toLocaleDateString('sv');
 const S = { user: null, me: null, members: [], household: null, cats: [], tx: [],
             month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
             filter: 'all', tab: 'home', booted: false,
-            products: [], pantry: [], staples: [], stores: [], prices: [], foodReady: false, sub: 'stock',
+            products: [], pantry: [], staples: [], stores: [], prices: [], foodReady: false, sub: 'buy',
             token: null, inbox: [], autoReady: false, carry: 0, carryReady: false,
             goals: [], deposits: [], goalsReady: false, limSub: 'cats',
             photos: [], photosReady: false, urls: {},
             rules: [], rulesReady: false, skipped: new Set(), offline: false,
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
+            shop: [], shopReady: false,
             recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
@@ -321,7 +322,7 @@ const isNetErr = e => !!e && /failed to fetch|networkerror|network request|load 
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 const SNAP_KEYS = ['cats', 'tx', 'members', 'household', 'products', 'pantry', 'staples', 'stores', 'prices', 'goals', 'deposits',
-  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady', 'recipes', 'recipeItems', 'meals', 'menuReady'];
+  'photos', 'rules', 'inbox', 'token', 'carry', 'carryReady', 'foodReady', 'goalsReady', 'photosReady', 'rulesReady', 'autoReady', 'recur', 'recurReady', 'tasks', 'tasksReady', 'recipes', 'recipeItems', 'meals', 'menuReady', 'shop', 'shopReady'];
 function saveSnap() {
   const o = { uid: S.user.id, at: Date.now(), month: S.month.getTime() };
   SNAP_KEYS.forEach(k => { o[k] = S[k]; });
@@ -396,7 +397,7 @@ async function refresh(opts = {}) {
   if (queue().length) await flushQueue();
   const [from, to] = monthRange();
   const since = new Date(Date.now() - 62 * 864e5).toISOString();   // для сверки с банком: уведомления за два месяца
-  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq, rc, ri, mp] = await Promise.all([
+  const [c, t, m, pr, pa, sp, sr, pc, tk, ib, hh, cr, gl, gd, ph, ru, rp, bk, tq, rc, ri, mp, si] = await Promise.all([
     sb.from('categories').select('*').order('name'),
     sb.from('transactions').select('*').gte('date', from).lt('date', to)
       .order('date', { ascending: false }).order('created_at', { ascending: false }),
@@ -419,7 +420,8 @@ async function refresh(opts = {}) {
     sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(500),
     sb.from('recipes').select('*').order('name'),
     sb.from('recipe_items').select('*'),
-    sb.from('meal_plan').select('*').gte('date', addDays(today(), -21)).order('date')
+    sb.from('meal_plan').select('*').gte('date', addDays(today(), -21)).order('date'),
+    sb.from('shopping_items').select('*').order('created_at')
   ]);
   if ([c, t, m].some(x => x.error && isNetErr(x.error))) {
     // сети нет: остаёмся на том, что уже загружено, или берём сохранённый снимок
@@ -439,11 +441,13 @@ async function refresh(opts = {}) {
   S.carry = S.carryReady ? (+cr.data || 0) : 0;
   if (c.error || t.error || m.error) return fail(c.error || t.error || m.error);
   const sig = JSON.stringify([c.data, t.data, m.data, pr.data, pa.data, sp.data, sr.data, pc.data, ib.data, tk.data, hh.data, cr.data,
-    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, rc.data, ri.data, mp.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
+    gl.data, gd.data, ph.data, ru.data, rp.data, bk.data, tq.data, rc.data, ri.data, mp.data, si.data, S.month.getTime(), queue().length, failedQ().length, wasOff]);
   if (opts.poll && sig === S._sig) return;       // при периодическом опросе ничего не перерисовываем, если данные те же
   S._sig = sig;
   S.dataVer++;
   S.cats = c.data; S.tx = mergePending(t.data); S.members = m.data; S.txMonth = S.month.getTime();
+  S.shopReady = !si.error;
+  S.shop = (S.shopReady && si.data) || [];
   S.menuReady = !(rc.error || ri.error || mp.error);
   S.recipes = (S.menuReady && rc.data) || [];
   S.recipeItems = (S.menuReady && ri.data) || [];
@@ -492,7 +496,7 @@ function subscribe() {
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
-  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan'].forEach(tb => {
+  ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items'].forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -661,7 +665,25 @@ function go(tab) {
   history.pushState({ t: tab }, '');
   render();
 }
+// Окно снизу и просмотр фото добавляют шаг в историю: системная кнопка «Назад» (Android) закрывает их, а не экран.
+let overlayHist = false, ignorePop = false;
+function overlayOpened() {
+  if (overlayHist) return;
+  try { history.pushState(Object.assign({}, history.state, { overlay: 1 }), ''); overlayHist = true; } catch (e) {}
+}
+function overlayClosed() {            // закрыли кнопкой: убираем лишний шаг из истории
+  if (!overlayHist) return;
+  overlayHist = false; ignorePop = true;
+  history.back();
+}
 window.addEventListener('popstate', e => {
+  if (ignorePop) { ignorePop = false; return; }
+  if (overlayHist) {
+    overlayHist = false;
+    if (viewerOpen) { closeViewer(); return; }
+    if (dropSheet()) return;
+    // закрывать нечего (окно уже убрано): обычный шаг назад по экранам
+  }
   S.tab = (e.state && e.state.t) || 'home';
   S._enter = 'back';
   if (S.me) render();
@@ -688,7 +710,7 @@ function render() {
   S._enter = null;
   $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' ? '' : '<button class="fab" id="add">+</button>'}`;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
-  if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
+  if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'buy' ? ($('#bin') && $('#bin').focus ? $('#bin').focus() : null) : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
@@ -761,7 +783,7 @@ function renderHome() {
   <div class="grid">
     <button class="tile t1" data-t="tx">${ICONS.tx}<div><b>Операции</b><span>Записей: ${S.tx.length}</span></div></button>
     <button class="tile t2" data-t="lim">${ICONS.lim}<div><b>Лимиты</b><span>Задано: ${limits}</span></div></button>
-    <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? 'Докупить: ' + missing().length : 'нужно обновить базу'}</span></div></button>
+    <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? (buyCount() ? 'Купить: ' + buyCount() : 'Всё есть') : 'нужно обновить базу'}</span></div></button>
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
     <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${!S.tasksReady ? 'нужно обновить базу' : todayTasks().length ? 'На сегодня: ' + todayTasks().length : openTasks().length ? 'Всего дел: ' + openTasks().length : 'Дел нет'}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
@@ -831,12 +853,16 @@ function renderLimits() {
     <button class="ghost full" id="ac">+ Новая категория</button>`;
 }
 
+// код одноразовый (update-15.sql): после вступления сервер меняет его, и старый перестаёт работать
+const inviteHtml = () => `<p>Код приглашения:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.invite_code)}</div>
+    <div class="mute">Пусть человек зарегистрируется в приложении и выберет «Меня пригласили». Код одноразовый: после вступления он сменится.</div>`;
+
 // «Семья»: участники и то, что надо разобрать; всё настраиваемое — в «Настройках» (шестерёнка на главной)
 function renderMore() {
   return `<div class="card"><div class="mute">Семья «${esc(S.household.name)}»</div>
     <div>${S.members.map(m => esc(m.name)).join(', ')}</div>
-    ${S.members.length < 2 ? `<p>Код приглашения для второго участника:</p><div class="big" style="letter-spacing:.1em">${esc(S.household.invite_code)}</div>
-    <div class="mute">Пусть партнёр зарегистрируется в приложении и выберет «Меня пригласили».</div>` : ''}</div>
+    ${S.members.length < 2 ? inviteHtml()
+      : S.me.role === 'owner' ? '<button class="link" id="invmore" style="padding:8px 0 0">Пригласить ещё одного человека</button><div id="invbox"></div>' : ''}</div>
   ${renderInboxCard()}
   <div class="mute" style="padding:0 4px">Уведомления, автоимпорт, резервная копия и выход — в настройках: значок шестерёнки на главном экране.</div>`;
 }
@@ -869,7 +895,7 @@ function bindTab() {
   $('#app').querySelectorAll('.recur').forEach(el => el.onclick = () => openRecur(el.dataset.r));
   $('#app').querySelectorAll('[data-gap]').forEach(el => el.onclick = () => openGap(el.dataset.gap));
   $('#app').querySelectorAll('[data-ts]').forEach(b => b.onclick = () => { S.todoSub = b.dataset.ts; S._enter = 'sub'; render(); });
-  $('#app').querySelectorAll('.task').forEach(el => el.onclick = e => { if (e && e.target && e.target.closest && e.target.closest('[data-tdone]')) return; openTask(el.dataset.task); });
+  $('#app').querySelectorAll('.task[data-task]').forEach(el => el.onclick = e => { if (e && e.target && e.target.closest && e.target.closest('[data-tdone]')) return; openTask(el.dataset.task); });
   $('#app').querySelectorAll('[data-tdone]').forEach(b => b.onclick = e => { if (e) e.stopPropagation(); toggleTask(b.dataset.tdone); });
   $('#app').querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { S.calDay = b.dataset.cd; render(); });
   if ($('#tadd')) $('#tadd').onclick = () => openTask(null, { due: S.calDay });
@@ -883,6 +909,15 @@ function bindTab() {
   if ($('#shop')) $('#shop').onclick = openShop;
   if ($('#mwp')) { $('#mwp').onclick = () => { S.menuWeek--; S._enter = 'sub'; render(); }; $('#mwn').onclick = () => { S.menuWeek++; S._enter = 'sub'; render(); }; }
   if ($('#recipes')) $('#recipes').onclick = openRecipes;
+  if ($('#invmore')) $('#invmore').onclick = () => { $('#invbox').innerHTML = inviteHtml(); $('#invmore').remove(); };
+  if ($('#badd')) {
+    $('#badd').onclick = addShopItem;
+    $('#bin').onkeydown = e => { if (e.key === 'Enter') addShopItem(); };
+    $('#bqt').onkeydown = e => { if (e.key === 'Enter') addShopItem(); };
+  }
+  if ($('#bclr')) $('#bclr').onclick = clearBought;
+  $('#app').querySelectorAll('[data-shop]').forEach(el => el.onclick = e => { if (e && e.target && e.target.closest && e.target.closest('[data-sdone]')) return; openShopItem(el.dataset.shop); });
+  $('#app').querySelectorAll('[data-sdone]').forEach(b => b.onclick = e => { if (e) e.stopPropagation(); toggleShop(b.dataset.sdone); });
   $('#app').querySelectorAll('[data-madd]').forEach(b => b.onclick = () => openMealAdd(b.dataset.madd));
   $('#app').querySelectorAll('[data-meal]').forEach(el => el.onclick = () => openMeal(el.dataset.meal));
   if ($('#inbox')) $('#inbox').onclick = openInbox;
@@ -901,21 +936,24 @@ function bindTab() {
 function sheet(html) {
   document.querySelectorAll('.sheet-bg.out').forEach(x => x.remove());   // id закрывающегося окна не должны мешать новому
   const old = $('#sh');
-  if (old) old.remove(); else sound('open');
+  if (old) old.remove(); else { sound('open'); overlayOpened(); }
   const d = document.createElement('div');
   d.className = 'sheet-bg'; d.id = 'sh';
   d.innerHTML = `<div class="sheet">${html}</div>`;
   d.onclick = e => { if (e.target === d) closeSheet(); };
   document.body.appendChild(d);
 }
-const closeSheet = () => {
+// убрать окно с экрана (без истории)
+function dropSheet() {
   const s = $('#sh');
-  if (!s) return;
+  if (!s) return false;
   sound('close');
-  if (!calm()) return s.remove();
+  if (!calm()) { s.remove(); return true; }
   s.id = ''; s.classList.add('out');
   setTimeout(() => s.remove(), 180);
-};
+  return true;
+}
+const closeSheet = () => { if (dropSheet()) overlayClosed(); };
 
 // pre: заполнить заранее (kind, amount, date, note) и onSaved — что сделать после сохранения
 function openAdd(pre = {}) {
@@ -1153,11 +1191,12 @@ function renderFood() {
   if (!S.foodReady) {
     return '<div class="card"><b>Нужно обновить базу</b><p class="mute">Выполните файл update-2.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
   }
-  const seg = `<div class="seg">
+  const seg = `<div class="seg fit">
+    <button data-sub="buy" class="${S.sub === 'buy' ? 'on' : ''}">Купить</button>
     <button data-sub="stock" class="${S.sub === 'stock' ? 'on' : ''}">Дома</button>
-    <button data-sub="staples" class="${S.sub === 'staples' ? 'on' : ''}">Всегда дома</button>
+    <button data-sub="staples" class="${S.sub === 'staples' ? 'on' : ''}">Всегда</button>
     <button data-sub="menu" class="${S.sub === 'menu' ? 'on' : ''}">Меню</button></div>`;
-  return seg + (S.sub === 'stock' ? renderStock() : S.sub === 'menu' ? renderMenu() : renderStaples());
+  return seg + (S.sub === 'buy' ? renderBuy() : S.sub === 'stock' ? renderStock() : S.sub === 'menu' ? renderMenu() : renderStaples());
 }
 
 function renderStock() {
@@ -1390,6 +1429,98 @@ async function cookMeal(mid) {
   sound('success');
   closeSheet(); refresh();
   toast(notEnough.length ? 'Списано. Дома не хватило: ' + notEnough.join(', ') : 'Приготовлено, продукты списаны', notEnough.length ? 6000 : 2600);
+}
+
+
+// ----- общий список покупок: разовые покупки, отмечать в магазине -----
+const shopNeedSql = '<div class="card"><b>Список покупок</b><p class="mute">Выполните файл update-15.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
+const openShopItems = () => S.shop.filter(x => !x.done);
+// сколько всего купить: разовые покупки плюс нехватка по «Всегда дома» и меню
+const buyCount = () => (S.shopReady ? openShopItems().length : 0) + missing().length;
+
+function shopRow(x) {
+  const meta = [x.qty, x.created_by && x.created_by !== S.user.id ? nameOf(x.created_by) : ''].filter(Boolean).join(' · ');
+  return `<div class="task${x.done ? ' done' : ''}" data-shop="${x.id}"><button class="tchk" data-sdone="${x.id}" aria-label="${x.done ? 'Вернуть в список' : 'Купили'}">${x.done ? '✓' : ''}</button>
+    <div style="min-width:0;flex:1"><div class="ttl">${esc(x.title)}</div>${meta ? `<div class="mute">${esc(meta)}</div>` : ''}</div></div>`;
+}
+
+function renderBuy() {
+  if (!S.shopReady) return shopNeedSql;
+  const open = openShopItems().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const done = S.shop.filter(x => x.done).sort((a, b) => String(b.done_at || '').localeCompare(String(a.done_at || ''))).slice(0, 30);
+  const auto = missing();
+  return `<div class="card"><div class="row" style="gap:8px">
+      <input id="bin" placeholder="Что купить" maxlength="200" style="flex:1" autocomplete="off" enterkeyhint="done">
+      <input id="bqt" placeholder="Сколько" maxlength="40" style="width:92px" autocomplete="off"></div>
+      <div class="err" id="berr"></div>
+      <button class="full" id="badd">Добавить</button></div>
+    <div class="card">${open.map(shopRow).join('') || '<div class="empty">Список пуст.<br>Запишите, что купить, и это сразу увидит вся семья.</div>'}</div>
+    ${auto.length ? `<div class="card"><b>По запасам и меню не хватает: ${auto.length}</b>
+      <div class="mute">${esc(auto.slice(0, 4).map(x => x.p.name).join(', '))}${auto.length > 4 ? ' и ещё ' + (auto.length - 4) : ''}</div>
+      <button class="ghost full" id="shop">Что докупить и где дешевле</button></div>` : ''}
+    ${done.length ? `<div class="day">Куплено</div><div class="card">${done.map(shopRow).join('')}
+      <button class="ghost full" id="bclr">Очистить купленное</button></div>` : ''}`;
+}
+
+const shopHint = e => /shopping_items|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-15.sql в Supabase' : e.message;
+async function addShopItem() {
+  const title = $('#bin').value.trim(), qty = $('#bqt').value.trim() || null;
+  if (!title) { $('#berr').textContent = 'Напишите, что купить'; return; }
+  $('#badd').disabled = true;
+  const { data, error } = await sb.from('shopping_items').insert({ household_id: S.household.id, title, qty }).select().single();
+  $('#badd').disabled = false;
+  if (error) { $('#berr').textContent = shopHint(error); return; }
+  if (data && !S.shop.some(x => x.id === data.id)) S.shop.push(data);
+  render();
+  const inp = $('#bin');                       // поле снова пустое и готово к следующей покупке
+  if (inp && inp.focus) inp.focus();
+}
+
+// «купили» видно сразу, сервер догоняет; при ошибке возвращаем как было
+async function toggleShop(id) {
+  const x = S.shop.find(i => i.id === id);
+  if (!x) return;
+  const was = { done: x.done, done_at: x.done_at };
+  x.done = !x.done; x.done_at = x.done ? new Date().toISOString() : null;
+  render();
+  const { data, error } = await sb.from('shopping_items').update({ done: x.done, done_at: x.done_at }).eq('id', id).select();
+  if (error || !data || !data.length) { Object.assign(x, was); render(); toast('Не удалось сохранить: ' + (error ? error.message : 'нет связи'), 4000); }
+}
+
+function openShopItem(id) {
+  const x = S.shop.find(i => i.id === id);
+  if (!x) return;
+  sheet(`<b>Покупка</b>
+    <input id="sit" value="${esc(x.title)}" maxlength="200" placeholder="Что купить">
+    <input id="siq" value="${esc(x.qty || '')}" maxlength="40" placeholder="Сколько (необязательно)">
+    <div class="mute">${x.created_by ? 'Кто добавил: ' + esc(nameOf(x.created_by)) + ', ' : 'Добавлено '}${esc(fmtWhen(x.created_at))}</div>
+    <div class="err" id="err"></div>
+    <button class="full" id="sisv">Сохранить</button>
+    <button class="ghost full" id="sidl" style="color:var(--bad)">Удалить</button>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  $('#sisv').onclick = async () => {
+    const title = $('#sit').value.trim();
+    if (!title) return $('#err').textContent = 'Напишите, что купить';
+    const { error } = await sb.from('shopping_items').update({ title, qty: $('#siq').value.trim() || null }).eq('id', id);
+    if (error) return $('#err').textContent = shopHint(error);
+    closeSheet(); refresh();
+  };
+  $('#sidl').onclick = async () => {
+    const { error } = await sb.from('shopping_items').delete().eq('id', id);
+    if (error) return $('#err').textContent = shopHint(error);
+    S.shop = S.shop.filter(i => i.id !== id);
+    closeSheet(); render();
+  };
+}
+
+async function clearBought() {
+  const n = S.shop.filter(x => x.done).length;
+  if (!n || !confirm('Убрать из списка купленное (' + n + ')?')) return;
+  const { error } = await sb.from('shopping_items').delete().eq('done', true);
+  if (error) return toast(shopHint(error), 4000);
+  S.shop = S.shop.filter(x => !x.done);
+  render();
 }
 
 
@@ -2277,9 +2408,11 @@ async function uploadPhotos(files) {
   toast(bad ? `Загружено ${ok}, не удалось ${bad}: ${lastErr}` : (ok === 1 ? 'Фото добавлено' : `Добавлено фото: ${ok}`), bad ? 5000 : 2600);
 }
 
-function closeViewer() { const v = document.getElementById('viewer'); if (v) v.remove(); document.removeEventListener('keydown', viewerKey); }
+let viewerOpen = false;
+function closeViewer() { viewerOpen = false; const v = document.getElementById('viewer'); if (v) v.remove(); document.removeEventListener('keydown', viewerKey); }
+const closeViewerUI = () => { closeViewer(); overlayClosed(); };      // закрыли кнопкой, Esc или удалением
 function viewerKey(e) {
-  if (e.key === 'Escape') closeViewer();
+  if (e.key === 'Escape') closeViewerUI();
   else if (e.key === 'ArrowLeft') stepViewer(-1);
   else if (e.key === 'ArrowRight') stepViewer(1);
 }
@@ -2304,8 +2437,10 @@ async function openViewer(id) {
       <input id="vc" value="${esc(ph.caption || '')}" placeholder="Подпись" maxlength="200">
       <div class="row"><button class="ghost" id="vs">Сохранить на телефон</button>${canDel ? '<button class="ghost" id="vd" style="color:var(--bad)">Удалить</button>' : ''}</div></div>`;
   document.body.appendChild(v);
+  viewerOpen = true;
+  overlayOpened();
   document.addEventListener('keydown', viewerKey);
-  v.querySelector('#vx').onclick = closeViewer;
+  v.querySelector('#vx').onclick = closeViewerUI;
   let x0 = null;
   v.querySelector('.vi').ontouchstart = e => { x0 = e.touches[0].clientX; };
   v.querySelector('.vi').ontouchend = e => {
@@ -2338,7 +2473,7 @@ async function openViewer(id) {
     const { error } = await sb.from('photos').delete().eq('id', id);
     if (error) return toast(error.message, 4000);
     await bucket().remove([ph.path, ph.thumb_path]);
-    closeViewer(); refresh();
+    closeViewerUI(); refresh();
   };
   // сначала размытая миниатюра, затем полный снимок
   await signUrls([ph.thumb_path, ph.path]);
@@ -2741,12 +2876,13 @@ function taskMeta(t) {
   if (t.repeat) parts.push('↻ ' + REPEAT[t.repeat].toLowerCase());
   return parts.join(' · ');
 }
-const REPEAT = { day: 'Каждый день', week: 'Каждую неделю', month: 'Каждый месяц' };
-// следующая дата повтора; 31-е в коротком месяце становится последним днём месяца
+const REPEAT = { day: 'Каждый день', week: 'Каждую неделю', month: 'Каждый месяц', year: 'Каждый год' };
+// следующая дата повтора; 31-е в коротком месяце становится последним днём месяца, 29 февраля — 28-м
 function nextDue(iso, repeat) {
   if (repeat === 'day') return addDays(iso, 1);
   if (repeat === 'week') return addDays(iso, 7);
   const [y, m, d] = iso.split('-').map(Number);
+  if (repeat === 'year') return `${y + 1}-${pad(m)}-${pad(Math.min(d, new Date(y + 1, m, 0).getDate()))}`;
   const last = new Date(y, m + 1, 0).getDate();
   return `${m === 12 ? y + 1 : y}-${pad(m === 12 ? 1 : m + 1)}-${pad(Math.min(d, last))}`;
 }
@@ -2807,7 +2943,8 @@ function openTask(id, pre = {}) {
     <button class="link full" id="cl">Отмена</button>`);
   if (!t && $('#tt').focus) $('#tt').focus();
   $('#cl').onclick = closeSheet;
-  const sqlHint = e => /repeat/i.test(e.message) ? 'Для повтора выполните update-13.sql в Supabase'
+  const sqlHint = e => /tasks_repeat_check/i.test(e.message) ? 'Для повтора «каждый год» выполните update-15.sql в Supabase'
+    : /repeat/i.test(e.message) ? 'Для повтора выполните update-13.sql в Supabase'
     : /tasks|relation|schema cache/i.test(e.message) ? 'Сначала выполните update-12.sql в Supabase' : e.message;
   $('#tsv').onclick = async () => {
     const title = $('#tt').value.trim(), due = $('#tdt').value || null, time = $('#ttm').value || null, repeat = $('#trp').value || null;
