@@ -61,7 +61,10 @@ function buildDigest(d) {
 // --- digest:end ---
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
-const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const json = (o: any, status = 200) => {
+  if (status >= 400) console.error('push-digest: ' + status + ' ' + (o && o.error));   // причина видна во вкладке Logs функции
+  return new Response(JSON.stringify(o), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
