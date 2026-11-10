@@ -79,6 +79,17 @@ nav button.on{color:var(--brand)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .big{font:700 28px/1.2 "Unbounded","Golos Text",sans-serif;letter-spacing:-.02em}
 .err{color:var(--bad);font-size:14px;min-height:20px}
+/* голосовой помощник */
+.fab.mic{right:auto;left:18px;background:rgba(38,20,78,.92);border:1px solid var(--line);box-shadow:0 8px 24px rgba(8,2,24,.5);animation:none;display:grid;place-items:center}
+.fab.mic svg,.micbig svg{width:28px;height:28px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+button.micbig{display:grid;place-items:center;width:96px;height:96px;margin:10px auto 4px;padding:0;border-radius:50%;box-shadow:0 10px 30px rgba(139,92,246,.5)}
+button.micbig svg{width:40px;height:40px;stroke:#fff}
+button.micbig.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
+@keyframes micpulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,.6)}100%{box-shadow:0 0 0 26px rgba(248,113,113,0)}}
+.center{text-align:center}
+.vcard{margin-top:10px;display:grid;gap:6px}
+.vok{color:var(--good)}
+.vreply{font-size:16px;line-height:1.45}
 .empty{text-align:center;color:var(--mute);padding:26px 8px}
 .empty::before{content:"\2726";display:block;font-size:30px;color:var(--brand);margin-bottom:8px;animation:twinkle 2.4s ease-in-out infinite alternate;text-shadow:0 0 18px rgba(192,132,252,.8)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
@@ -708,7 +719,8 @@ function render() {
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
   const enter = S._enter ? ' enter-' + S._enter : '';
   S._enter = null;
-  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' ? '' : '<button class="fab" id="add">+</button>'}`;
+  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
+  if ($('#mic')) $('#mic').onclick = openVoice;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'buy' ? ($('#bin') && $('#bin').focus ? $('#bin').focus() : null) : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
@@ -947,6 +959,7 @@ function sheet(html) {
 function dropSheet() {
   const s = $('#sh');
   if (!s) return false;
+  if (rec) stopRec(true);                 // закрыли окно помощника во время записи: микрофон выключаем
   sound('close');
   if (!calm()) { s.remove(); return true; }
   s.id = ''; s.classList.add('out');
@@ -2995,6 +3008,240 @@ async function toggleTask(id) {
   }
 }
 
+
+// ---------- голосовой помощник ----------
+// Запись голоса (или текст) уходит в функцию voice -> Gemini; обратно приходят действия, их выполняем здесь
+// от имени вошедшего человека. Без связи с помощником простые фразы разбираются по шаблонам (voiceLocal).
+const VOICE_FN = 'voice';
+const vnorm = s => String(s || '').trim().toLowerCase().replace(/ё/g, 'е');
+const MIC_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>';
+let rec = null;   // идёт запись: { mr, stream, chunks, timer, t0 }
+
+// краткая сводка для помощника: что есть в приложении сейчас
+function voiceCtx() {
+  const cname = id => (S.cats.find(c => c.id === id) || {}).name || 'Без категории';
+  const spent = {};
+  counted().filter(t => t.kind === 'expense').forEach(t => { const n = cname(t.category_id); spent[n] = (spent[n] || 0) + +t.amount; });
+  const sum = k => Math.round(counted().filter(t => t.kind === k).reduce((s, t) => s + +t.amount, 0));
+  const pname = id => (S.products.find(p => p.id === id) || {}).name;
+  return {
+    today: today(), weekday: new Date().toLocaleDateString('ru-RU', { weekday: 'long' }),
+    me: S.me ? S.me.name : '', other: partner() ? partner().name : null,
+    'Категории расходов': S.cats.filter(c => c.kind === 'expense').map(c => c.name),
+    'Категории доходов': S.cats.filter(c => c.kind === 'income').map(c => c.name),
+    'Месяц на экране': monthLabel(), 'Расходы по категориям': Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v)])),
+    'Всего расходов': sum('expense'), 'Всего доходов': sum('income'),
+    'Лимиты': S.cats.filter(c => c.kind === 'expense' && +c.monthly_limit > 0).map(c => c.name + ': ' + Math.round(+c.monthly_limit)),
+    'Последние операции': S.tx.slice(0, 20).map(t => [t.date, t.kind === 'income' ? '+' : '−', Math.round(+t.amount), cname(t.category_id), t.note || ''].join(' ').trim()),
+    'Дела': S.tasks.filter(t => !t.done).slice(0, 40).map(t => [t.title, t.due || '', t.due_time ? String(t.due_time).slice(0, 5) : '', t.assignee ? nameOf(t.assignee) : 'общее'].join(' | ')),
+    'Список покупок': S.shop.filter(x => !x.done).map(x => x.title + (x.qty ? ' (' + x.qty + ')' : '')),
+    'Продукты дома': [...new Set(S.pantry.map(b => pname(b.product_id)).filter(Boolean))].slice(0, 60)
+  };
+}
+
+// проверка и чистка того, что вернула модель (или шаблоны): только понятные действия с правильными значениями
+function voiceClean(list) {
+  const isDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+  const out = [];
+  (Array.isArray(list) ? list : []).slice(0, 20).forEach(a => {
+    if (!a || typeof a !== 'object') return;
+    const title = String(a.title || '').trim().slice(0, 200);
+    if (a.type === 'expense' || a.type === 'income') {
+      const amount = Math.round(+a.amount * 100) / 100;
+      if (!(amount > 0 && amount < 10000000)) return;
+      out.push({ type: a.type, amount, category: String(a.category || '').trim(), note: String(a.note || '').trim().slice(0, 200), date: isDate(a.date) ? a.date : today() });
+    } else if (a.type === 'shop' && title) out.push({ type: 'shop', title, qty: String(a.qty || '').trim().slice(0, 40) || null });
+    else if ((a.type === 'bought' || a.type === 'task_done') && title) out.push({ type: a.type, title });
+    else if (a.type === 'task' && title) {
+      const time = /^\d{1,2}:\d{2}$/.test(a.time || '') ? pad(+a.time.split(':')[0]) + ':' + a.time.split(':')[1] : null;
+      const due = isDate(a.due) ? a.due : time ? today() : null;
+      out.push({ type: 'task', title, due, time: time && +time.slice(0, 2) < 24 ? time : null, who: ['me', 'other'].includes(a.who) ? a.who : 'all', repeat: REPEAT[a.repeat] ? a.repeat : null });
+    }
+  });
+  return out;
+}
+
+// найти по названию: сначала точное совпадение, потом «содержит»
+function vfind(list, name, key = 'name') {
+  const n = vnorm(name);
+  if (!n) return null;
+  return list.find(x => vnorm(x[key]) === n) || list.find(x => vnorm(x[key]).includes(n) || n.includes(vnorm(x[key]))) || null;
+}
+
+// простые фразы без помощника: «потратил 450 на продукты», «купить молоко и хлеб», «напомни завтра в 18 забрать посылку»
+function voiceLocal(text) {
+  const t = vnorm(text).replace(/[.!?]+$/, '');
+  const shop = t.match(/^(?:купить|купи|надо купить|нужно купить|добавь в список|в список)\s+(.+)$/);
+  if (shop) return shop[1].split(/\s*(?:,|\sи\s)\s*/).filter(Boolean).map(title => ({ type: 'shop', title }));
+  const task = t.match(/^(?:напомни|напомнить|дело|задача|надо|нужно)\s+(.+)$/);
+  if (task) {
+    let rest = task[1], due = null, time = null;
+    const day = { 'сегодня': 0, 'завтра': 1, 'послезавтра': 2 };
+    // \b в JavaScript не работает с русскими буквами, поэтому границы слова — через (^|\s)
+    rest = rest.replace(/(^|\s)(сегодня|послезавтра|завтра)(?=\s|$)/, (m, sp, w) => { const d = new Date(); d.setDate(d.getDate() + day[w]); due = d.toLocaleDateString('sv'); return sp; });
+    rest = rest.replace(/(^|\s)в\s(\d{1,2})(?:[:.](\d{2}))?(?:\s*час\S*)?(?=\s|$)/, (m, sp, h, mm) => { time = pad(+h) + ':' + (mm || '00'); return sp; });
+    rest = rest.replace(/\s+/g, ' ').trim();
+    if (rest) return [{ type: 'task', title: rest.charAt(0).toUpperCase() + rest.slice(1), due, time }];
+  }
+  const num = t.match(/(\d+(?:\s\d{3})*(?:[.,]\d+)?)(?:\s*(?:₽|руб\S*|р)(?=\s|$))?/);
+  if (num && /потрат|заплат|минус|расход|купил|отдал|доход|получил|зарплат|плюс|пришл/.test(t)) {
+    const amount = parseFloat(num[1].replace(/\s/g, '').replace(',', '.'));
+    const kind = /доход|получил|зарплат|плюс|пришл/.test(t) ? 'income' : 'expense';
+    const cat = S.cats.filter(c => c.kind === kind).find(c => t.includes(vnorm(c.name)));
+    const note = (' ' + t.replace(num[0], ' ') + ' ').replace(/\s(?=\S)/g, '  ')
+      .replace(/\s(я|мы|потратил\S*|заплатил\S*|отдал\S*|минус|расход|доход|получил\S*|плюс|рублей|руб|на|за|в)(?=\s)/g, ' ').replace(/\s+/g, ' ').trim();
+    return [{ type: kind, amount, category: cat ? cat.name : '', note: cat && vnorm(note) === vnorm(cat.name) ? '' : note }];
+  }
+  return [];
+}
+
+// выполнить действия; возвращает строки для показа и функции отмены
+async function voiceRun(actions) {
+  const done = [];
+  for (const a of actions) {
+    try {
+      if (a.type === 'expense' || a.type === 'income') {
+        const cat = vfind(S.cats.filter(c => c.kind === a.type), a.category);
+        const row = { id: crypto.randomUUID(), household_id: S.household.id, kind: a.type, amount: a.amount, category_id: cat ? cat.id : null, shared: true, note: a.note || null, date: a.date };
+        const { error } = await sb.from('transactions').insert(row);
+        if (error) { done.push({ text: 'Не записалось: ' + error.message, bad: true }); continue; }
+        done.push({ text: (a.type === 'income' ? 'Доход ' : 'Расход ') + fmt(a.amount) + (cat ? ' · ' + cat.name : '') + (a.note ? ' · ' + a.note : '') + (a.date !== today() ? ' · ' + dayLabel(a.date) : ''),
+          undo: () => sb.from('transactions').delete().eq('id', row.id) });
+      } else if (a.type === 'shop') {
+        const { data, error } = await sb.from('shopping_items').insert({ household_id: S.household.id, title: a.title, qty: a.qty }).select().single();
+        if (error) { done.push({ text: 'Не добавилось «' + a.title + '»: ' + error.message, bad: true }); continue; }
+        done.push({ text: 'В список покупок: ' + a.title + (a.qty ? ' (' + a.qty + ')' : ''), undo: () => sb.from('shopping_items').delete().eq('id', data.id) });
+      } else if (a.type === 'bought') {
+        const x = vfind(S.shop.filter(i => !i.done), a.title, 'title');
+        if (!x) { done.push({ text: 'В списке покупок нет «' + a.title + '»', bad: true }); continue; }
+        const { error } = await sb.from('shopping_items').update({ done: true, done_at: new Date().toISOString() }).eq('id', x.id);
+        if (error) { done.push({ text: 'Не отметилось: ' + error.message, bad: true }); continue; }
+        x.done = true;
+        done.push({ text: 'Куплено: ' + x.title, undo: () => sb.from('shopping_items').update({ done: false, done_at: null }).eq('id', x.id) });
+      } else if (a.type === 'task') {
+        const assignee = a.who === 'me' ? S.user.id : a.who === 'other' && partner() ? partner().user_id : null;
+        const row = { household_id: S.household.id, title: a.title, due: a.due, due_time: a.time, assignee };
+        if (a.repeat) row.repeat = a.repeat;
+        const { data, error } = await sb.from('tasks').insert(row).select().single();
+        if (error) { done.push({ text: 'Дело не создалось: ' + error.message, bad: true }); continue; }
+        done.push({ text: 'Дело: ' + a.title + (a.due ? ' · ' + dayLabel(a.due) : '') + (a.time ? ' в ' + a.time : '') + (assignee ? ' · ' + nameOf(assignee) : '') + (a.repeat ? ' · ' + REPEAT[a.repeat].toLowerCase() : ''),
+          undo: () => sb.from('tasks').delete().eq('id', data.id) });
+      } else if (a.type === 'task_done') {
+        const x = vfind(S.tasks.filter(i => !i.done), a.title, 'title');
+        if (!x) { done.push({ text: 'Нет такого дела: «' + a.title + '»', bad: true }); continue; }
+        await toggleTask(x.id);
+        done.push({ text: 'Сделано: ' + x.title, undo: () => sb.from('tasks').update({ done: false, done_at: null }).eq('id', x.id) });
+      }
+    } catch (e) { done.push({ text: 'Ошибка: ' + (e.message || e), bad: true }); }
+  }
+  return done;
+}
+
+function openVoice() {
+  const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
+  sheet(`<b>Помощник</b>
+    ${canRec ? `<button class="micbig" id="vrec" aria-label="Говорить">${MIC_SVG}</button>` : ''}
+    <div class="mute center" id="vst">${canRec ? 'Нажмите и скажите, например: «Потратил 450 на продукты», «Купить молоко и хлеб» или «Завтра в 18:00 забрать посылку». Нажмите ещё раз, когда закончите.'
+      : 'Запись голоса здесь недоступна. Напишите или продиктуйте с клавиатуры (значок микрофона на ней).'}</div>
+    <div class="row" style="gap:8px"><input id="vtx" placeholder="${canRec ? 'или напишите…' : 'Например: купить молоко и хлеб'}" maxlength="600" style="flex:1"><button id="vgo" style="width:56px">→</button></div>
+    <div id="vres"></div>
+    <button class="link full" id="cl">Закрыть</button>`);
+  $('#cl').onclick = closeSheet;
+  if ($('#vrec')) $('#vrec').onclick = () => rec ? stopRec(false) : startRec();
+  const go = () => { const v = $('#vtx').value.trim(); if (v) voiceSend({ text: v }); };
+  $('#vgo').onclick = go;
+  $('#vtx').onkeydown = e => { if (e.key === 'Enter') go(); };
+}
+
+const vstatus = t => { const el = $('#vst'); if (el) el.textContent = t; };
+
+async function startRec() {
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { return vstatus('Нет доступа к микрофону. Разрешите его для этого приложения в настройках телефона или напишите текстом.'); }
+  const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+  const mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+  rec = { mr, stream, chunks: [], t0: Date.now(), cancel: false };
+  mr.ondataavailable = e => { if (e.data && e.data.size) rec && rec.chunks.push(e.data); };
+  mr.onstop = () => {
+    const r = rec; rec = null;
+    r.stream.getTracks().forEach(t => t.stop());
+    clearInterval(r.timer);
+    if ($('#vrec')) $('#vrec').classList.remove('on');
+    if (r.cancel) return;
+    if (Date.now() - r.t0 < 700) return vstatus('Слишком коротко. Нажмите и скажите ещё раз.');
+    const blob = new Blob(r.chunks, { type: mr.mimeType || type || 'audio/webm' });
+    const fr = new FileReader();
+    fr.onload = () => voiceSend({ audio: String(fr.result).split(',')[1], mime: blob.type });
+    fr.readAsDataURL(blob);
+  };
+  mr.start();
+  sound('tap');
+  if ($('#vrec')) $('#vrec').classList.add('on');
+  rec.timer = setInterval(() => {
+    const s = Math.round((Date.now() - (rec ? rec.t0 : Date.now())) / 1000);
+    vstatus('Слушаю… ' + s + ' с. Нажмите, когда закончите.');
+    if (s >= 45) stopRec(false);
+  }, 250);
+  vstatus('Слушаю… Нажмите, когда закончите.');
+}
+function stopRec(cancel) {
+  if (!rec) return;
+  rec.cancel = cancel;
+  try { rec.mr.stop(); } catch (e) { rec.stream.getTracks().forEach(t => t.stop()); rec = null; }
+}
+
+// понятное объяснение ошибки функции
+async function voiceErr(error) {
+  let code = '';
+  try { const j = await error.context.json(); code = j.error || ''; } catch (e) {}
+  return {
+    no_key: 'Помощник ещё не подключён: в Supabase нужен ключ GEMINI_API_KEY (инструкция НАСТРОЙКА-ГОЛОСА.md).',
+    bad_key: 'Ключ Gemini не подошёл. Проверьте GEMINI_API_KEY в секретах функции.',
+    limit: 'Бесплатный лимит помощника на сегодня закончился. Простые фразы можно писать текстом.',
+    auth: 'Нужно войти в приложение заново.',
+    too_long: 'Слишком длинная запись. Скажите короче.'
+  }[code] || (isNetErr(error) ? 'Нет связи с сервером.' : /not found|404/i.test(String(error.message)) ? 'Функция помощника ещё не установлена.' : 'Помощник не ответил. Попробуйте ещё раз.');
+}
+
+async function voiceSend(payload) {
+  if (S.voiceBusy) return;
+  S.voiceBusy = true;
+  vstatus('Разбираю…');
+  if ($('#vgo')) $('#vgo').disabled = true;
+  let res = null, why = '';
+  try {
+    const { data, error } = await sb.functions.invoke(VOICE_FN, { body: { ...payload, ctx: voiceCtx() } });
+    if (error) why = await voiceErr(error); else res = data;
+  } catch (e) { why = 'Помощник не ответил. Попробуйте ещё раз.'; }
+  // помощник недоступен, но есть текст: пробуем разобрать сами
+  if (!res && payload.text) {
+    const local = voiceLocal(payload.text);
+    if (local.length) res = { transcript: payload.text, actions: local, reply: '', local: true };
+  }
+  S.voiceBusy = false;
+  if ($('#vgo')) $('#vgo').disabled = false;
+  if (!$('#vres')) return;
+  if (!res) { vstatus(why); return; }
+  const actions = voiceClean(res.actions);
+  vstatus(res.local ? 'Помощник недоступен (' + why.replace(/\.$/, '') + '), разобрал сам.' : 'Готово. Можно сказать ещё.');
+  const done = actions.length ? await voiceRun(actions) : [];
+  if (done.some(d => !d.bad)) { sound('success'); refresh(); }
+  if ($('#vtx') && payload.text) $('#vtx').value = '';
+  const undo = done.filter(d => d.undo);
+  $('#vres').innerHTML = `<div class="card vcard">
+      ${res.transcript ? `<div class="mute">«${esc(res.transcript)}»</div>` : ''}
+      ${done.map(d => `<div class="${d.bad ? 'err' : 'vok'}">${d.bad ? '' : '✓ '}${esc(d.text)}</div>`).join('')}
+      ${res.reply ? `<div class="vreply">${esc(res.reply)}</div>` : ''}
+      ${!done.length && !res.reply ? '<div class="mute">Не понял, что сделать. Скажите по-другому.</div>' : ''}
+      ${undo.length ? `<button class="ghost full" id="vundo">Отменить${undo.length > 1 ? ' всё' : ''}</button>` : ''}</div>`;
+  if ($('#vundo')) $('#vundo').onclick = async () => {
+    $('#vundo').disabled = true;
+    for (const d of undo.reverse()) { try { await d.undo(); } catch (e) {} }
+    $('#vres').innerHTML = '<div class="mute center">Отменено.</div>';
+    refresh();
+  };
+}
 
 // ---------- push-уведомления ----------
 // Открытый ключ VAPID (публичный по задумке); закрытый хранится только в настройках функции Supabase.
