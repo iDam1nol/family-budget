@@ -79,6 +79,14 @@ nav button.on{color:var(--brand)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .big{font:700 28px/1.2 "Unbounded","Golos Text",sans-serif;letter-spacing:-.02em}
 .err{color:var(--bad);font-size:14px;min-height:20px}
+/* чек к операции */
+.rcpt{display:flex;gap:10px;align-items:stretch;margin:4px 0 10px}
+button.rcimg{flex:none;position:relative;width:96px;height:120px;padding:0;border-radius:14px;overflow:hidden;background:rgba(255,255,255,.06);border:1px solid var(--line);box-shadow:none}
+button.rcimg img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s}
+button.rcimg img.in{opacity:1}
+button.rcimg span{position:absolute;left:0;right:0;bottom:0;padding:4px 0;font-size:12px;background:rgba(10,4,26,.7);color:#fff}
+.rcbtns{flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center}
+.rcbtns button{margin:0}
 /* итоги месяца */
 .sumtop{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
 .sumtop>div{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:16px;padding:12px}
@@ -914,7 +922,7 @@ function txRows(list, withYear) {
     }
     const cat = S.cats.find(c => c.id === t.category_id);
     rows += `<div class="tx${t.excluded ? ' off' : ''}" data-id="${t.id}"><div>
-      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}${t._pending ? '<span class="badge">ждёт отправки</span>' : ''}${t.excluded ? '<span class="badge">не учитывается</span>' : ''}</div>
+      <div>${esc(cat ? cat.name : 'Без категории')}${t.shared ? '' : '<span class="badge">личное</span>'}${t._pending ? '<span class="badge">ждёт отправки</span>' : ''}${t.excluded ? '<span class="badge">не учитывается</span>' : ''}${t.receipt_path ? '<span class="badge">🧾 чек</span>' : ''}</div>
       <div class="mute">${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
       <div class="amt ${t.kind === 'income' ? 'inc' : ''}">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div></div>`;
   }
@@ -1127,8 +1135,11 @@ function openAdd(pre = {}) {
     <input id="nt" placeholder="Заметка (необязательно)" value="${esc(pre.note || '')}">
     <input id="dt" type="date" value="${esc(pre.date || today())}">
     <div class="seg" id="sc"><button data-s="1" class="on">Общий</button><button data-s="0">Личный</button></div>
+    <button class="ghost full" id="rcpick">🧾 Прикрепить чек</button>
     <div class="err" id="err"></div>
     <button class="full" id="sv">Сохранить</button>`);
+  let rfile = null;          // снимок чека: загрузим сразу после сохранения операции
+  $('#rcpick').onclick = () => pickImage(f => { rfile = f; $('#rcpick').textContent = '🧾 Чек выбран ✓ · заменить'; });
   $('#am').focus();
   $('#ct').onchange = async () => {
     if ($('#ct').value !== '__new') return;
@@ -1163,11 +1174,17 @@ function openAdd(pre = {}) {
       lsSet('fb_q', [...queue(), row]);
       S.tx = mergePending(S.tx.filter(x => !x._pending));
       closeSheet(); render();
-      return toast('Нет связи. Операция сохранена на телефоне и отправится сама.', 4500);
+      return toast('Нет связи. Операция сохранена на телефоне и отправится сама.' + (rfile ? ' Чек без связи не сохранить: прикрепите его позже.' : ''), 5500);
     }
     if (error) { $('#sv').disabled = false; return $('#err').textContent = error.message; }
     if (pre.onSaved) await pre.onSaved();
-    closeSheet(); refresh();
+    closeSheet();
+    if (rfile) {
+      const msg = toast('Загружаем чек…', 0);
+      try { await uploadReceipt({ id: row.id, receipt_path: null }, rfile); msg.remove(); }
+      catch (e) { msg.remove(); toast('Операция сохранена, а чек нет: ' + e.message, 5500); }
+    }
+    refresh();
   };
 }
 
@@ -1186,6 +1203,7 @@ function openTx(id) {
   const own = t.user_id === S.user.id || (S.me && S.me.role === 'owner');
   sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
     <p>${esc(cat ? cat.name : 'Без категории')} · ${esc(t.date)}<br><span class="mute">${esc(nameOf(t.user_id))}${t.shared ? ' · общий' : ' · личный'}${t.note ? ' · ' + esc(t.note) : ''}</span></p>
+    ${receiptBox(t, own)}
     ${own ? `<div class="mute">Категория</div><select id="ec">${S.cats.filter(c => c.kind === t.kind).map(c => `<option value="${c.id}"${c.id === t.category_id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}<option value=""${t.category_id ? '' : ' selected'}>Без категории</option></select><div class="mute" id="ecm"></div>` : ''}
     ${own && t.note && S.rulesReady ? `<div class="mute" style="margin-top:8px">Запомнить для похожих операций: если в тексте есть</div>
       <input id="rk" value="${esc(guessKeyword(t.note))}" placeholder="Например: пятёрочка">
@@ -1233,12 +1251,93 @@ function openTx(id) {
     } catch (e) { $('#rkm').textContent = e.message; }
   };
   if ($('#dl')) $('#dl').onclick = async () => {
-    if (!confirm('Удалить операцию?')) return;
+    if (!confirm('Удалить операцию?' + (t.receipt_path ? ' Снимок чека тоже удалится.' : ''))) return;
     const { data, error } = await sb.from('transactions').delete().eq('id', id).select();
     if (error) return alert(error.message);
     if (!data || !data.length) return alert('Не удалось удалить: нет прав. Проверьте, что обновление базы выполнено.');
+    if (t.receipt_path) bucket().remove([t.receipt_path]).catch(() => {});
     closeSheet(); refresh();
   };
+  bindReceipt(t, own);
+}
+
+// ---------- чек к операции ----------
+// Снимок лежит в закрытом хранилище семьи: family-photos/<семья>/receipts/<операция>-<метка>.jpg (update-18.sql)
+function receiptBox(t, own) {
+  if (t.receipt_path) return `<div class="rcpt"><button class="rcimg" id="rcopen" aria-label="Открыть чек"><img data-p="${esc(t.receipt_path)}" alt="Чек"><span>🧾 Чек</span></button>
+    ${own ? '<div class="rcbtns"><button class="ghost" id="rcch">Заменить</button><button class="ghost" id="rcdel" style="color:var(--bad)">Убрать</button></div>' : ''}</div>`;
+  return own ? '<button class="ghost full" id="rcadd">🧾 Прикрепить чек</button>' : '';
+}
+function pickImage(cb) {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+  inp.onchange = () => { const f = inp.files && inp.files[0]; inp.remove(); if (f) cb(f); };
+  document.body.appendChild(inp);
+  inp.click();
+}
+// сжать, загрузить и записать в операцию; старый снимок удаляется. Возвращает путь или бросает ошибку с понятным текстом
+async function uploadReceipt(t, file) {
+  const img = await toJpeg(file, 1800, .85);                 // текст чека должен читаться
+  const path = `${S.household.id}/receipts/${t.id}-${Date.now().toString(36)}.jpg`;
+  const up = await bucket().upload(path, img.blob, { contentType: 'image/jpeg' });
+  if (up.error) throw new Error(/bucket|not found/i.test(up.error.message) ? 'Хранилище фото не настроено: выполните update-7.sql' : up.error.message);
+  const { data, error } = await sb.from('transactions').update({ receipt_path: path }).eq('id', t.id).select();
+  if (error || !data || !data.length) {
+    await bucket().remove([path]).catch(() => {});
+    throw new Error(error && /receipt_path|column|schema cache/i.test(error.message) ? 'Выполните update-18.sql в Supabase' : error ? error.message : 'нет прав на эту операцию');
+  }
+  if (t.receipt_path && t.receipt_path !== path) bucket().remove([t.receipt_path]).catch(() => {});
+  t.receipt_path = path;
+  return path;
+}
+function bindReceipt(t, own) {
+  if (t.receipt_path && $('#rcopen')) {
+    $('#rcopen').onclick = () => openReceipt(t.receipt_path);
+    signUrls([t.receipt_path]).then(applyUrls).catch(() => {});
+  }
+  const attach = () => pickImage(async f => {
+    const msg = toast('Загружаем чек…', 0);
+    try { await uploadReceipt(t, f); msg.remove(); toast('Чек прикреплён'); if ($('#sh')) openTx(t.id); refresh(); }
+    catch (e) { msg.remove(); toast('Чек не загрузился: ' + e.message, 5000); }
+  });
+  if (own && $('#rcadd')) $('#rcadd').onclick = attach;
+  if (own && $('#rcch')) $('#rcch').onclick = attach;
+  if (own && $('#rcdel')) $('#rcdel').onclick = async () => {
+    if (!confirm('Убрать снимок чека из операции?')) return;
+    const old = t.receipt_path;
+    const { data, error } = await sb.from('transactions').update({ receipt_path: null }).eq('id', t.id).select();
+    if (error || !data || !data.length) return toast('Не удалось: ' + (error ? error.message : 'нет прав'), 4000);
+    bucket().remove([old]).catch(() => {});
+    t.receipt_path = null;
+    openTx(t.id); refresh();
+  };
+}
+// просмотр чека на весь экран (как фото); «Назад» на Android закрывает
+async function openReceipt(path) {
+  closeViewer();
+  viewerId = null;
+  const v = document.createElement('div');
+  v.className = 'viewer'; v.id = 'viewer';
+  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>Чек</span></div>
+    <div class="vi"><img id="vimg" data-p="${esc(path)}" alt="Чек"></div>
+    <div class="vb"><button class="ghost full" id="vs">Сохранить на телефон</button></div>`;
+  document.body.appendChild(v);
+  viewerOpen = true;
+  overlayOpened();
+  document.addEventListener('keydown', viewerKey);
+  v.querySelector('#vx').onclick = closeViewerUI;
+  v.querySelector('#vs').onclick = async () => {
+    const { data, error } = await bucket().createSignedUrl(path, 600);
+    if (error) return toast('Не удалось получить файл', 3000);
+    try {
+      const blob = await (await fetch(data.signedUrl)).blob();
+      const file = new File([blob], 'chek.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    window.open(data.signedUrl, '_blank');
+  };
+  await signUrls([path]);
+  applyUrls();
 }
 
 function editLimit(id) {
@@ -2579,6 +2678,7 @@ function viewerKey(e) {
 }
 let viewerId = null;
 function stepViewer(d) {
+  if (!viewerId) return;          // открыт чек, а не фото семьи: листать нечего
   const i = S.photos.findIndex(x => x.id === viewerId) + d;
   if (i >= 0 && i < S.photos.length) openViewer(S.photos[i].id);
 }
