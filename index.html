@@ -92,22 +92,53 @@ button.micbig.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite
 @keyframes micpulse{0%{box-shadow:0 0 0 0 rgba(248,113,113,.6)}100%{box-shadow:0 0 0 26px rgba(248,113,113,0)}}
 .center{text-align:center}
 .vcard{margin-top:10px;display:grid;gap:6px}
-/* чат помощника */
-.vchat{max-height:56vh;min-height:120px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:8px;padding:6px 2px;margin:6px 0}
-.msg{max-width:86%;padding:10px 13px;border-radius:18px;line-height:1.45;font-size:15px;overflow-wrap:anywhere}
-.msg.me{align-self:flex-end;background:var(--grad);color:#fff;border-bottom-right-radius:6px}
-.msg.ai{align-self:flex-start;background:var(--solid);border:1px solid var(--line);border-bottom-left-radius:6px}
-.msg.ai.bad{border-color:rgba(251,113,133,.5)}
-.msg .vok,.msg .err{font-size:14px;margin-top:6px;min-height:0}
+/* чат помощника: окно почти на весь экран, шапка, переписка, строка ввода снизу */
+.sheet.chat{display:flex;flex-direction:column;height:94vh;height:94dvh;max-height:none;padding:0;overflow:hidden}
+.sheet.chat::before{top:7px}
+.chead{display:flex;align-items:center;gap:12px;padding:20px 14px 12px 16px;border-bottom:1px solid var(--line)}
+.cava{flex:none;width:40px;height:40px;border-radius:50%;background:var(--grad);display:grid;place-items:center;box-shadow:0 4px 14px rgba(139,92,246,.45)}
+.cava svg{width:22px;height:22px;fill:#fff}
+.cava.sm{width:28px;height:28px;box-shadow:none}.cava.sm svg{width:15px;height:15px}
+.chead .ttl{flex:1;min-width:0}.chead .ttl b{display:block;font-size:17px}.chead .ttl span{font-size:12px;color:var(--mute)}
+.chead button{flex:none;width:40px;height:40px;padding:0;border-radius:50%;background:rgba(255,255,255,.07);box-shadow:none;display:grid;place-items:center;color:var(--ink)}
+.chead button svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vchat{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;padding:16px 14px}
+.mrow{display:flex;gap:8px;align-items:flex-end;max-width:100%}
+.mrow.me{justify-content:flex-end}
+.msg{max-width:82%;padding:10px 14px;border-radius:20px;line-height:1.5;font-size:15.5px;overflow-wrap:anywhere}
+.msg.me{background:var(--grad);color:#fff;border-bottom-right-radius:6px;box-shadow:0 4px 14px rgba(139,92,246,.3)}
+.msg.ai{background:rgba(255,255,255,.06);border:1px solid var(--line);border-bottom-left-radius:6px}
+.msg.ai.bad{border-color:rgba(251,113,133,.45);color:#ffd5dc}
+.vacts{display:grid;gap:6px;margin-top:8px}
+.vact{display:flex;gap:8px;align-items:flex-start;font-size:14px;line-height:1.35;padding:8px 10px;border-radius:12px;background:rgba(110,231,183,.09);color:var(--ink)}
+.vact i{flex:none;width:18px;height:18px;border-radius:50%;background:var(--good);color:#0d2b22;font-style:normal;font-size:12px;font-weight:700;display:grid;place-items:center}
+.vact.bad{background:rgba(251,113,133,.1)}.vact.bad i{background:var(--bad);color:#3a0a14}
+.vact.off{opacity:.55;text-decoration:line-through}
+.mtools{display:flex;gap:6px;margin-top:8px}
+.mtools button{padding:5px 11px;font-size:13px;font-weight:500;border-radius:99px;background:rgba(255,255,255,.07);color:var(--mute);box-shadow:none}
 .msg .vsrc{font-size:12px;color:var(--mute);margin-top:6px}
 .msg .vsrc a{color:var(--brand)}
-.msg .vundo{padding:6px 0 0;font-size:14px}
-.vhint{margin:auto 0;line-height:1.6;padding:12px 6px}
-.vbar{display:flex;gap:8px;align-items:flex-end}
-.vbar textarea{flex:1;min-width:0;margin:0;resize:none;max-height:120px;font:inherit}
-.vbar>button{flex:none;width:50px;height:50px;padding:0;border-radius:50%}
-button.micsm{display:grid;place-items:center;background:rgba(38,20,78,.92);border:1px solid var(--line)}
-button.micsm svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vempty{margin:auto 0;text-align:center;padding:8px 4px}
+.vempty .cava{width:64px;height:64px;margin:0 auto 12px}.vempty .cava svg{width:34px;height:34px}
+.vempty b{display:block;font-size:20px;margin-bottom:4px}
+.vempty p{color:var(--mute);margin:0 0 16px;font-size:14px}
+.vsug{display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left}
+.vsug button{padding:11px 12px;border-radius:16px;font-size:13.5px;font-weight:500;line-height:1.3;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);box-shadow:none;display:flex;gap:8px;align-items:flex-start;text-align:left}
+.vsug button span{font-size:17px;line-height:1}
+#vst{font-size:13px;color:var(--mute);text-align:center;padding:0 16px;min-height:0}
+#vst:empty{display:none}
+.cbar{display:flex;gap:8px;align-items:flex-end;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(14,7,32,.55)}
+.cin{flex:1;min-width:0;display:flex;align-items:flex-end;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:24px;padding:0 6px 0 14px;transition:border-color .2s}
+.cin:focus-within{border-color:rgba(183,156,255,.6)}
+.cin textarea{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;line-height:1.4;padding:12px 0;margin:0;resize:none;outline:0;max-height:132px}
+.cin textarea::placeholder{color:var(--mute)}
+.crec{flex:1;display:none;align-items:center;gap:10px;padding:13px 4px;font-size:15px}
+.crec i{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:blinkrec 1s infinite}
+@keyframes blinkrec{50%{opacity:.25}}
+.cbar.rec .cin textarea{display:none}.cbar.rec .crec{display:flex}
+.cbar>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
+.cbar>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cbar>button[hidden]{display:none}
 button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .dots{display:inline-flex;gap:4px;padding:4px 0}
 .dots i{width:7px;height:7px;border-radius:50%;background:var(--mute);animation:dot 1.2s infinite ease-in-out}
@@ -3250,45 +3281,87 @@ const chatSave = () => lsSet('fb_chat', { at: Date.now(), m: S.chat.filter(m => 
 // модель иногда склеивает пункты в строку («…так.- Обжарь…»): разносим их по строкам
 const replyHtml = t => esc(String(t || '').replace(/([.!?:;)])\s*-\s+(?=[А-ЯЁA-Z0-9])/g, '$1\n- '))
   .split('\n').map(l => l.replace(/^\s*[-*•]\s+/, '• ')).join('<br>');
+const SPARK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg>';
+const SEND_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg>';
+// подсказки в пустом чате: ask — сразу спросить; fill — подставить в поле (команды, чтобы ничего не записалось случайно)
+const CHAT_SUGGEST = [
+  ['💸', 'Сколько мы потратили в этом месяце?', 'ask'], ['📉', 'Где можно сэкономить?', 'ask'],
+  ['📅', 'Что у нас на завтра?', 'ask'], ['🍲', 'Что приготовить из того, что есть дома?', 'ask'],
+  ['🛒', 'Купить молоко и хлеб', 'fill'], ['⏰', 'Завтра в 18:00 забрать посылку', 'fill']];
+
 function chatHtml() {
-  if (!S.chat.length) return `<div class="mute center vhint">Спросите что угодно или попросите что-то записать. Например:<br>«Что приготовить из курицы и риса?»<br>«Сколько ушло на кафе в октябре?»<br>«Купить молоко и хлеб»<br>«Завтра в 18:00 забрать посылку»</div>`;
-  return S.chat.map(m => m.role === 'user' ? `<div class="msg me">${esc(m.text)}</div>`
-    : `<div class="msg ai${m.bad ? ' bad' : ''}">${m.pending ? '<span class="dots"><i></i><i></i><i></i></span>' : replyHtml(m.text)}
-      ${(m.done || []).map(d => `<div class="${d.bad ? 'err' : 'vok'}">${d.bad ? '' : '✓ '}${esc(d.text)}</div>`).join('')}
+  if (!S.chat.length) return `<div class="vempty"><div class="cava">${SPARK_SVG}</div><b>Чем помочь?</b>
+    <p>Спросите что угодно или попросите записать трату, покупку, дело.</p>
+    <div class="vsug">${CHAT_SUGGEST.map(([ic, t, k], i) => `<button data-sug="${i}"><span>${ic}</span>${esc(t)}</button>`).join('')}</div></div>`;
+  return S.chat.map(m => m.role === 'user' ? `<div class="mrow me"><div class="msg me">${esc(m.text)}</div></div>`
+    : `<div class="mrow"><div class="cava sm">${SPARK_SVG}</div><div class="msg ai${m.bad ? ' bad' : ''}">${m.pending ? '<span class="dots"><i></i><i></i><i></i></span>' : replyHtml(m.text)}
+      ${(m.done || []).length ? `<div class="vacts">${m.done.map(d => `<div class="vact${d.bad ? ' bad' : ''}${d.off ? ' off' : ''}"><i>${d.bad ? '!' : '✓'}</i><span>${esc(d.text)}</span></div>`).join('')}</div>` : ''}
       ${m.sources && m.sources.length ? `<div class="vsrc">Источники: ${m.sources.map(s => `<a href="${esc(s.uri)}" target="_blank" rel="noopener">${esc(s.title)}</a>`).join(' · ')}</div>` : ''}
-      ${S.chatUndo[m.id] ? `<button class="link vundo" data-vundo="${m.id}">Отменить</button>` : ''}</div>`).join('');
+      ${!m.pending && (S.chatUndo[m.id] || (m.text && !m.bad)) ? `<div class="mtools">${S.chatUndo[m.id] ? `<button data-vundo="${m.id}">↶ Отменить</button>` : ''}${m.text && !m.bad ? `<button data-vcopy="${m.id}">Копировать</button>` : ''}</div>` : ''}</div></div>`).join('');
 }
 function chatDraw() {
   const box = $('#vchat');
   if (!box) return;
   box.innerHTML = chatHtml();
-  box.querySelectorAll && box.querySelectorAll('[data-vundo]').forEach(b => b.onclick = async () => {
+  const all = s => (box.querySelectorAll ? box.querySelectorAll(s) : []);
+  all('[data-vundo]').forEach(b => b.onclick = async () => {
     const id = b.dataset.vundo, list = S.chatUndo[id] || [];
     delete S.chatUndo[id];
     b.disabled = true;
     for (const u of list.slice().reverse()) { try { await u(); } catch (e) {} }
     const m = S.chat.find(x => x.id === id);
-    if (m) { m.done = (m.done || []).map(d => ({ ...d, text: d.bad ? d.text : d.text + ' — отменено', bad: true })); chatSave(); }
-    chatDraw(); refresh();
+    if (m) { m.done = (m.done || []).map(d => d.bad ? d : { ...d, off: true }); chatSave(); }
+    toast('Отменено'); chatDraw(); refresh();
+  });
+  all('[data-vcopy]').forEach(b => b.onclick = async () => {
+    const m = S.chat.find(x => x.id === b.dataset.vcopy);
+    try { await navigator.clipboard.writeText(m.text); toast('Скопировано'); } catch (e) { toast('Не удалось скопировать'); }
+  });
+  all('[data-sug]').forEach(b => b.onclick = () => {
+    const [, t, k] = CHAT_SUGGEST[+b.dataset.sug];
+    if (k === 'ask') voiceSend({ text: t });
+    else { const tx = $('#vtx'); tx.value = t; chatInput(); if (tx.focus) tx.focus(); }
   });
   box.scrollTop = 1e9;
+}
+// поле ввода растёт по тексту; пустое — кнопка микрофона, с текстом — «отправить»
+function chatInput() {
+  const tx = $('#vtx');
+  if (!tx) return;
+  if (tx.style) { tx.style.height = 'auto'; tx.style.height = Math.min(132, tx.scrollHeight || 0) + 'px'; }
+  const has = !!tx.value.trim();
+  if ($('#vrec')) { $('#vrec').hidden = has || !!S.voiceBusy; $('#vgo').hidden = !has && !S.voiceBusy; }
+}
+// окно по высоте видимой части экрана: на iPhone клавиатура не закрывает строку ввода
+function chatFit() {
+  const s = document.querySelector('#sh .sheet.chat'), vv = window.visualViewport;
+  if (s && vv && s.style) s.style.height = Math.round(Math.min(window.innerHeight * 0.94, vv.height - 6)) + 'px';
 }
 
 function openVoice() {
   const canRec = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
   chatLoad();
-  sheet(`<div class="row"><b>Помощник</b><button class="link" id="vnew" style="padding:4px 0">Новый разговор</button></div>
+  sheet(`<div class="chead"><div class="cava">${SPARK_SVG}</div><div class="ttl"><b>Помощник</b><span>Ответит и запишет за вас</span></div>
+      <button id="vnew" aria-label="Новый разговор" title="Новый разговор"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+      <button id="cl" aria-label="Закрыть" title="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="vchat" id="vchat"></div>
-    <div class="mute center" id="vst">${canRec ? '' : 'Запись голоса здесь недоступна: продиктуйте с клавиатуры (значок микрофона на ней) или напишите.'}</div>
-    <div class="vbar">${canRec ? `<button class="micsm" id="vrec" aria-label="Говорить">${MIC_SVG}</button>` : ''}
-      <textarea id="vtx" rows="1" placeholder="Спросите или попросите…" maxlength="2000"></textarea><button id="vgo" aria-label="Отправить">→</button></div>
-    <button class="link full" id="cl">Закрыть</button>`);
-  chatDraw();
+    <div id="vst">${canRec ? '' : 'Запись голоса здесь недоступна: продиктуйте с клавиатуры (значок микрофона на ней) или напишите.'}</div>
+    <div class="cbar" id="cbar">
+      <div class="cin"><textarea id="vtx" rows="1" placeholder="Сообщение…" maxlength="2000" enterkeyhint="send"></textarea>
+        <div class="crec"><i></i><span id="vrt">Слушаю… 0:00</span></div></div>
+      ${canRec ? `<button class="micsm" id="vrec" aria-label="Говорить">${MIC_SVG}</button>` : ''}
+      <button id="vgo" aria-label="Отправить">${SEND_SVG}</button></div>`);
+  const sh = document.querySelector('#sh .sheet');
+  if (sh && sh.classList) sh.classList.add('chat');
+  chatFit();
+  if (window.visualViewport && !S.chatFitOn) { S.chatFitOn = true; window.visualViewport.addEventListener('resize', chatFit); }
+  chatDraw(); chatInput();
   $('#cl').onclick = closeSheet;
   $('#vnew').onclick = () => { S.chat = []; S.chatUndo = {}; chatSave(); chatDraw(); };
   if ($('#vrec')) $('#vrec').onclick = () => rec ? stopRec(false) : startRec();
-  const go = () => { const v = $('#vtx').value.trim(); if (v && !S.voiceBusy) { $('#vtx').value = ''; voiceSend({ text: v }); } };
+  const go = () => { const v = $('#vtx').value.trim(); if (v && !S.voiceBusy) { $('#vtx').value = ''; chatInput(); voiceSend({ text: v }); } };
   $('#vgo').onclick = go;
+  $('#vtx').oninput = chatInput;
   $('#vtx').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { if (e.preventDefault) e.preventDefault(); go(); } };
 }
 
@@ -3329,6 +3402,7 @@ async function startRec() {
     r.stream.getTracks().forEach(t => t.stop());
     clearInterval(r.timer);
     if ($('#vrec')) $('#vrec').classList.remove('on');
+    if ($('#cbar')) $('#cbar').classList.remove('rec');
     if (r.cancel) return;
     if (Date.now() - r.t0 < 700) return vstatus('Слишком коротко. Нажмите и скажите ещё раз.');
     const blob = new Blob(r.chunks, { type: mr.mimeType || type || 'audio/webm' });
@@ -3339,12 +3413,13 @@ async function startRec() {
   mr.start();
   sound('tap');
   if ($('#vrec')) $('#vrec').classList.add('on');
+  if ($('#cbar')) $('#cbar').classList.add('rec');      // вместо поля ввода — «Слушаю… 0:05»
+  vstatus('');
   rec.timer = setInterval(() => {
     const s = Math.round((Date.now() - (rec ? rec.t0 : Date.now())) / 1000);
-    vstatus('Слушаю… ' + s + ' с. Нажмите, когда закончите.');
+    if ($('#vrt')) $('#vrt').textContent = 'Слушаю… ' + Math.floor(s / 60) + ':' + pad(s % 60) + ' — нажмите, чтобы отправить';
     if (s >= 45) stopRec(false);
   }, 250);
-  vstatus('Слушаю… Нажмите, когда закончите.');
 }
 function stopRec(cancel) {
   if (!rec) return;
@@ -3375,6 +3450,7 @@ async function voiceSend(payload) {
   S.voiceBusy = true;
   vstatus('');
   if ($('#vgo')) $('#vgo').disabled = true;
+  chatInput();
   const history = chatHistory();
   const uid = 'u' + Date.now(), aid = 'a' + Date.now();
   const user = { id: uid, role: 'user', text: payload.text || '🎤 Голосовое сообщение' };
@@ -3409,7 +3485,7 @@ async function voiceSend(payload) {
   }
   S.voiceBusy = false;
   if ($('#vgo')) $('#vgo').disabled = false;
-  chatSave(); chatDraw();
+  chatSave(); chatDraw(); chatInput();
 }
 
 // ---------- push-уведомления ----------
