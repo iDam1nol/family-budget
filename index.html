@@ -79,6 +79,10 @@ nav button.on{color:var(--brand)}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .big{font:700 28px/1.2 "Unbounded","Golos Text",sans-serif;letter-spacing:-.02em}
 .err{color:var(--bad);font-size:14px;min-height:20px}
+/* поиск по операциям */
+.search{display:flex;gap:8px;align-items:center;margin:10px 0 0}
+.search input{flex:1;min-width:0;margin:0}
+.search button{flex:none;width:46px;height:46px;padding:0}
 /* голосовой помощник */
 .fab.mic{right:auto;left:18px;background:rgba(38,20,78,.92);border:1px solid var(--line);box-shadow:0 8px 24px rgba(8,2,24,.5);animation:none;display:grid;place-items:center}
 .fab.mic svg,.micbig svg{width:28px;height:28px;stroke:var(--ink);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -293,7 +297,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             rules: [], rulesReady: false, skipped: new Set(), offline: false,
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
-            shop: [], shopReady: false,
+            shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
             recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
@@ -568,9 +572,9 @@ function renderOnboarding() {
 }
 
 // ---------- главный экран ----------
-function visibleTx() {
+function visibleTx(src = S.tx) {
   const me = S.user.id, p = partner();
-  return S.tx.filter(t =>
+  return src.filter(t =>
     S.filter === 'all' ? true :
     S.filter === 'shared' ? t.shared :
     S.filter === 'mine' ? (!t.shared && t.user_id === me) :
@@ -821,14 +825,21 @@ function renderTx() {
   const p = partner();
   const seg = [['all', 'Все'], ['shared', 'Общие'], ['mine', 'Мои'], ['other', p ? p.name : 'Партнёр']]
     .map(([k, l]) => `<button data-f="${k}" class="${S.filter === k ? 'on' : ''}">${esc(l)}</button>`).join('');
-  const list = visibleTx();
-  const inc = counted(list).filter(t => t.kind === 'income').reduce((s, t) => s + +t.amount, 0);
-  const exp = counted(list).filter(t => t.kind === 'expense').reduce((s, t) => s + +t.amount, 0);
+  return `<div class="seg">${seg}</div>
+  <div class="search"><input id="txq" type="search" enterkeyhint="search" placeholder="Поиск по всем месяцам: кафе, 450, Пятёрочка" value="${esc(S.q)}" maxlength="60" autocomplete="off">
+    <button class="ghost" id="txqx" aria-label="Очистить поиск"${S.q ? '' : ' hidden'}>✕</button></div>
+  <div id="txbody">${txBody()}</div>`;
+}
+
+// строки операций по дням; withYear — в поиске, где попадаются разные месяцы и годы
+function txRows(list, withYear) {
   let rows = '', last = '';
+  const year = new Date().getFullYear();
   for (const t of list) {
     if (t.date !== last) {
       last = t.date;
-      rows += `<div class="day">${new Date(t.date + 'T00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' })}</div>`;
+      const d = new Date(t.date + 'T00:00');
+      rows += `<div class="day">${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short', ...(withYear && d.getFullYear() !== year ? { year: 'numeric' } : {}) })}</div>`;
     }
     const cat = S.cats.find(c => c.id === t.category_id);
     rows += `<div class="tx${t.excluded ? ' off' : ''}" data-id="${t.id}"><div>
@@ -836,12 +847,77 @@ function renderTx() {
       <div class="mute">${esc(nameOf(t.user_id))}${t.note ? ' · ' + esc(t.note) : ''}</div></div>
       <div class="amt ${t.kind === 'income' ? 'inc' : ''}">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div></div>`;
   }
-  return `<div class="seg">${seg}</div>
-  <div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
+  return rows;
+}
+const sumKind = (list, k) => counted(list).filter(t => t.kind === k).reduce((s, t) => s + +t.amount, 0);
+
+// содержимое под строкой поиска: обычный список за месяц или найденное за всё время
+function txBody() {
+  const q = S.q.trim();
+  if (q.length >= 2) {
+    if (S.foundKey !== q + '|' + S.dataVer) { txSearch(q); if (!S.found) return '<div class="card"><div class="empty">Ищем…</div></div>'; }
+    const list = visibleTx(S.found || []);
+    const inc = sumKind(list, 'income'), exp = sumKind(list, 'expense');
+    return `<div class="card"><div class="mute">Найдено: ${list.length}${list.length >= 200 ? ' (показаны последние 200)' : ''}${S.foundLocal ? ' · без связи искали только в сохранённых операциях' : ''}</div>
+      ${list.length ? `<div class="row" style="margin-top:4px"><span>Расход <b>${fmt(exp)}</b></span>${inc ? `<span>Доход <b style="color:var(--good)">${fmt(inc)}</b></span>` : ''}</div>` : ''}</div>
+      <div class="card">${txRows(list, true) || `<div class="empty">Ничего не нашлось по «${esc(q)}».<br>Ищем по заметке, категории, сумме и имени.</div>`}</div>`;
+  }
+  const list = visibleTx();
+  const inc = sumKind(list, 'income'), exp = sumKind(list, 'expense');
+  return `<div class="card sum"><div><span class="mute">Доход</span><b style="color:var(--good)">${fmt(inc)}</b></div>
   <div><span class="mute">Расход</span><b>${fmt(exp)}</b></div>
   <div><span class="mute">За месяц</span><b>${fmt(inc - exp)}</b></div></div>
   ${renderSortCard()}
-  <div class="card">${rows || '<div class="empty">Операций нет.<br>Нажмите + чтобы добавить.</div>'}</div>`;
+  <div class="card">${txRows(list, false) || '<div class="empty">Операций нет.<br>Нажмите + чтобы добавить.</div>'}</div>`;
+}
+
+// что искать в базе: заметка (ё = е), категории и люди по названию, сумма, если введено число
+function txSearchFilter(q) {
+  const qn = vnorm(q).replace(/["%_,()*\\]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!qn) return null;
+  const ors = [`note.ilike."%${qn.replace(/е/g, '_')}%"`];
+  const num = qn.replace(/\s/g, '').replace(',', '.');
+  if (/^\d+(\.\d+)?$/.test(num)) ors.push(`amount.eq.${num}`);
+  const cats = S.cats.filter(c => vnorm(c.name).includes(qn)).map(c => c.id);
+  if (cats.length) ors.push(`category_id.in.(${cats.join(',')})`);
+  const people = S.members.filter(m => vnorm(m.name).includes(qn)).map(m => m.user_id);
+  if (people.length) ors.push(`user_id.in.(${people.join(',')})`);
+  return ors.join(',');
+}
+// то же без сервера: по операциям, которые есть на телефоне
+function txSearchLocal(list, q) {
+  const qn = vnorm(q), num = qn.replace(/\s/g, '').replace(',', '.');
+  const cname = id => vnorm((S.cats.find(c => c.id === id) || {}).name);
+  return list.filter(t => vnorm(t.note).includes(qn) || cname(t.category_id).includes(qn) || vnorm(nameOf(t.user_id)).includes(qn) || (/^\d+(\.\d+)?$/.test(num) && +t.amount === +num));
+}
+async function txSearch(q) {
+  const key = q + '|' + S.dataVer;
+  if (S.searchKey === key) return;          // этот же поиск уже идёт
+  S.searchKey = key;
+  const f = txSearchFilter(q);
+  let found = [], local = false;
+  if (f) {
+    const { data, error } = await sb.from('transactions').select('*').or(f).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(200);
+    if (error) { local = true; found = txSearchLocal(S.tx, q); } else found = data || [];
+  }
+  if (S.searchKey !== key) return;          // пока искали, текст поменяли
+  S.found = found; S.foundKey = key; S.foundLocal = local;
+  if (S.tab === 'tx' && S.q.trim() === q) { $('#txbody').innerHTML = txBody(); bindTxRows(); }
+}
+function bindTxRows() { $('#app').querySelectorAll('.tx').forEach(el => el.onclick = () => openTx(el.dataset.id)); }
+// поле поиска: страницу не перерисовываем (иначе пропадёт клавиатура), меняем только список под ним
+function bindTxSearch() {
+  const inp = $('#txq');
+  if (!inp) return;
+  let timer = null;
+  const apply = () => {
+    if (S.q.trim().length < 2) { S.found = null; S.foundKey = ''; S.searchKey = ''; }
+    if ($('#txqx')) $('#txqx').hidden = !S.q;
+    $('#txbody').innerHTML = txBody(); bindTxRows();
+  };
+  inp.oninput = () => { S.q = inp.value; clearTimeout(timer); timer = setTimeout(apply, 300); };
+  inp.onkeydown = e => { if (e.key === 'Enter') { clearTimeout(timer); apply(); if (inp.blur) inp.blur(); } };
+  if ($('#txqx')) $('#txqx').onclick = () => { S.q = ''; inp.value = ''; clearTimeout(timer); apply(); };
 }
 
 function renderLimits() {
@@ -938,7 +1014,8 @@ function bindTab() {
   if ($('#rules')) $('#rules').onclick = openRules;
   if ($('#tkon')) $('#tkon').onclick = () => openToken(true);
   if ($('#tkshow')) $('#tkshow').onclick = () => openToken(false);
-  $('#app').querySelectorAll('.tx').forEach(el => el.onclick = () => openTx(el.dataset.id));
+  bindTxRows();
+  bindTxSearch();
   $('#app').querySelectorAll('.cat').forEach(el => el.onclick = () => editLimit(el.dataset.c));
   if ($('#ac')) $('#ac').onclick = addCategory;
   if ($('#lo')) $('#lo').onclick = () => { S.booted = false; sb.auth.signOut(); };
@@ -1024,7 +1101,7 @@ function openAdd(pre = {}) {
 }
 
 function openTx(id) {
-  const t = S.tx.find(x => x.id === id); if (!t) return;
+  const t = S.tx.find(x => x.id === id) || (S.found || []).find(x => x.id === id); if (!t) return;   // из поиска — и за другие месяцы
   const cat = S.cats.find(c => c.id === t.category_id);
   if (t._pending) {
     sheet(`<div class="big">${t.kind === 'income' ? '+' : '−'}${fmt(+t.amount)}</div>
