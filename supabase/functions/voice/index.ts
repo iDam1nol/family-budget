@@ -105,10 +105,14 @@ Deno.serve(async (req: Request) => {
   if (!key) return json({ error: 'no_key' }, 503);
 
   // только вошедший участник приложения (чтобы чужие не тратили бесплатный лимит)
-  const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
-  const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  const { data: u, error: ue } = await db.auth.getUser(token);
-  if (ue || !u.user) return json({ error: 'auth' }, 401);
+  // или проверочный вызов из базы с секретом расписания (CRON_SECRET, тот же, что у push-digest)
+  const cron = req.headers.get('x-cron-secret');
+  if (!(cron && env('CRON_SECRET') && cron === env('CRON_SECRET'))) {
+    const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
+    const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const { data: u, error: ue } = await db.auth.getUser(token);
+    if (ue || !u.user) return json({ error: 'auth' }, 401);
+  }
 
   let body: any;
   try { body = await req.json(); } catch (_) { return json({ error: 'bad_request' }, 400); }

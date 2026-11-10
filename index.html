@@ -3050,7 +3050,10 @@ function voiceClean(list) {
       const amount = Math.round(+a.amount * 100) / 100;
       if (!(amount > 0 && amount < 10000000)) return;
       out.push({ type: a.type, amount, category: String(a.category || '').trim(), note: String(a.note || '').trim().slice(0, 200), date: isDate(a.date) ? a.date : today() });
-    } else if (a.type === 'shop' && title) out.push({ type: 'shop', title, qty: String(a.qty || '').trim().slice(0, 40) || null });
+    } else if (a.type === 'shop' && title) {
+      const qty = String(a.qty || '').trim().slice(0, 40);
+      out.push({ type: 'shop', title, qty: qty && qty !== '1' ? qty : null });     // голая «1» — модель дописала сама, не показываем
+    }
     else if ((a.type === 'bought' || a.type === 'task_done') && title) out.push({ type: a.type, title });
     else if (a.type === 'task' && title) {
       const time = /^\d{1,2}:\d{2}$/.test(a.time || '') ? pad(+a.time.split(':')[0]) + ':' + a.time.split(':')[1] : null;
