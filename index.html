@@ -252,6 +252,10 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .msg.fm{touch-action:manipulation}
 .fheart{position:absolute;left:50%;top:50%;font-size:56px;line-height:1;pointer-events:none;transform:translate(-50%,-50%);animation:heartpop .8s ease-out forwards;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
 @keyframes heartpop{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}25%{transform:translate(-50%,-50%) scale(1.15);opacity:1}55%{transform:translate(-50%,-50%) scale(.95);opacity:1}100%{transform:translate(-50%,-90%) scale(1);opacity:0}}
+.frwho{padding:6px 8px 8px;margin-bottom:4px;border-bottom:1px solid var(--line);max-height:180px;overflow-y:auto}
+.frr{display:flex;align-items:flex-start;gap:10px;padding:5px 6px}
+.frr span{font-size:19px;line-height:1.2;flex:none}
+.frr b{font-weight:500;font-size:14.5px;line-height:1.45;color:var(--ink);max-width:220px}
 .fpq{padding:8px 14px 6px;color:var(--mute);font-size:13.5px}
 .mrow.lifted .msg{box-shadow:0 0 0 2px rgba(183,156,255,.6)}
 .fmenu button,.sheet [data-fwto]{margin-top:8px;text-align:left}
@@ -4109,10 +4113,22 @@ function openReactBar(id, anchor) {
 const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user));
 // изменить можно только своё и не пересланное
 const famCanEdit = m => !!m && m.user_id === S.user.id && !m.fwd_from && !m._pending;
+// автор видит в меню своего сообщения, кто какую реакцию поставил
+function famWhoHtml(m) {
+  if (!m || m.user_id !== S.user.id) return '';
+  const groups = [];
+  (S.reacts || []).filter(r => r.message_id === m.id).forEach(r => {
+    let g = groups.find(x => x.e === r.emoji);
+    if (!g) groups.push(g = { e: r.emoji, who: [] });
+    g.who.push(r.user_id === S.user.id ? 'Вы' : nameOf(r.user_id));
+  });
+  if (!groups.length) return '';
+  return '<div class="frwho">' + groups.map(g => `<div class="frr"><span>${esc(g.e)}</span><b>${esc(g.who.join(', '))}</b></div>`).join('') + '</div>';
+}
 function openFamMenu(id, anchor) {
   const m = S.msgs.find(x => x.id === id);
   if (!m) return;
-  const pop = famPop(`<button data-act="rep">↩ Ответить</button><button data-act="fwd">↪ Переслать</button>
+  const pop = famPop(`${famWhoHtml(m)}<button data-act="rep">↩ Ответить</button><button data-act="fwd">↪ Переслать</button>
     ${famCanEdit(m) ? '<button data-act="edit">✏️ Изменить</button>' : ''}${m.body ? '<button data-act="cpy">📋 Скопировать</button>' : ''}<button data-act="del" class="bad">🗑 Удалить</button>`, anchor, 'fmenu2');
   if (!pop) return;
   pop.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
