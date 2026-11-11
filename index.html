@@ -405,6 +405,8 @@ button.cday.on{background:var(--grad)}
 @keyframes growx{from{transform:scaleX(0)}to{transform:none}}
 .sheet-bg.out{animation:fadeout .18s forwards;pointer-events:none}
 .sheet-bg.out .sheet{animation:sink .18s ease-in forwards}
+.sheet-bg.out .sheet.drag{animation:none}
+.sheet.drag{animation:none}
 @keyframes fadeout{to{opacity:0}}
 @keyframes sink{to{transform:translateY(40px)}}
 #bg{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
@@ -1608,7 +1610,51 @@ function sheet(html) {
   d.className = 'sheet-bg'; d.id = 'sh';
   d.innerHTML = `<div class="sheet">${html}</div>`;
   d.onclick = e => { if (e.target === d) closeSheet(); };
+  sheetSwipe(d);
   document.body.appendChild(d);
+}
+// смахнуть окно вниз — закрыть. Тянуть можно за полоску сверху (в любом окне)
+// или за любое место, если окно не прокручено (кроме окна чата, там лента сама прокручивается)
+function sheetSwipe(bg) {
+  if (!bg.addEventListener) return;
+  let y0 = 0, x0 = 0, t0 = 0, dy = 0, on = false, may = false, s = null;
+  const scrolledUp = el => { for (; el && el !== s; el = el.parentElement) if (el.scrollTop > 0) return true; return s.scrollTop > 0; };
+  bg.addEventListener('touchstart', e => {
+    s = bg.querySelector('.sheet'); on = false; dy = 0;
+    if (!s || e.touches.length > 1) { may = false; return; }
+    const p = e.touches[0], top = p.clientY - s.getBoundingClientRect().top;
+    const field = e.target.closest && e.target.closest('textarea,select,input[type=range]');
+    may = top < 44 || (!s.classList.contains('chat') && !field && !scrolledUp(e.target));
+    y0 = p.clientY; x0 = p.clientX; t0 = Date.now();
+  }, { passive: true });
+  bg.addEventListener('touchmove', e => {
+    if (!may) return;
+    const p = e.touches[0], d = p.clientY - y0;
+    if (!on) {
+      if (Math.abs(p.clientX - x0) > Math.abs(d) || d < -4) { may = false; return; }   // вбок или вверх — обычная прокрутка
+      if (d < 8) return;
+      on = true; y0 = p.clientY; s.classList.add('drag'); s.style.transition = 'none';
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    }
+    e.preventDefault();
+    dy = Math.max(0, p.clientY - y0);
+    s.style.transform = `translateY(${dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (!on) return;
+    on = false; may = false;
+    const fast = dy > 40 && dy / Math.max(1, Date.now() - t0) > .5;
+    if (dy > Math.min(140, s.offsetHeight * .3) || fast) {
+      s.style.transition = 'transform .2s ease-in';
+      s.style.transform = 'translateY(105%)';
+      closeSheet();
+    } else {
+      s.style.transition = 'transform .22s cubic-bezier(.2,.8,.2,1)';
+      s.style.transform = '';
+    }
+  };
+  bg.addEventListener('touchend', end);
+  bg.addEventListener('touchcancel', end);
 }
 // убрать окно с экрана (без истории)
 function dropSheet() {
