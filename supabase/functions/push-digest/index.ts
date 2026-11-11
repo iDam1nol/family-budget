@@ -105,7 +105,8 @@ function buildMonth(d) {
 }
 // сообщение чата -> уведомление получателю. m: строка family_messages, from: имя автора
 function chatMsg(m, from) {
-  const text = String(m.body || '').replace(/\s+/g, ' ').trim();
+  const words = String(m.body || '').replace(/\s+/g, ' ').trim();
+  const text = (m.fwd_from ? '↪ ' : '') + (m.photo_path ? '📷 Фото' + (words ? ': ' + words : '') : words);
   return {
     title: m.to_user ? from + ' · лично' : from + ' · чат семьи',
     body: text.length > 180 ? text.slice(0, 177) + '…' : text,

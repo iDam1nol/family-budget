@@ -197,19 +197,42 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .tripcd b{display:block;font:700 24px/1.1 "Unbounded","Golos Text",sans-serif;font-variant-numeric:tabular-nums}
 .tripcd span{display:block;font-size:11.5px;color:var(--mute);margin-top:3px}
 .t7{background:linear-gradient(135deg,#312e81,#6d28d9 60%,#c026d3)}
-.fchat{display:flex;flex-direction:column;justify-content:flex-end;gap:6px;padding:4px 0 10px;min-height:calc(100vh - 190px);min-height:calc(100dvh - 190px)}
+.chatwrap{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;padding-bottom:0;overflow:hidden}
+.chatwrap>.chathead,.chatwrap>.fbar,.chatwrap>.offline{flex:none}
+.fchat{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column;gap:6px;padding:4px 2px 10px;margin:0 -2px}
+.fchat>:first-child{margin-top:auto}
 .fday{align-self:center;font-size:12px;color:var(--mute);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:3px 10px;margin:8px 0 2px}
-.msg.fm{position:relative;padding-bottom:19px;min-width:84px;white-space:pre-wrap}
+.mrow.flash .msg{animation:flash 1.4s ease}
+@keyframes flash{0%,60%{box-shadow:0 0 0 3px rgba(251,207,232,.85)}100%{box-shadow:none}}
+.msg.fm{position:relative;padding-bottom:19px;min-width:84px;cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.msg.fm .ftx{white-space:pre-wrap}
 .msg.fm .fwho{display:block;font-size:12.5px;font-weight:700;margin-bottom:2px;white-space:normal}
 .msg.fm .ft{position:absolute;right:12px;bottom:4px;font-size:10.5px;opacity:.65;white-space:nowrap}
 .msg.fm a{color:inherit;text-decoration:underline}
 .msg.fm.pend{opacity:.6}
 .msg.ai.fm{background:rgba(40,26,76,.85)}
-.fbar{position:sticky;bottom:0;z-index:4;display:flex;gap:8px;align-items:flex-end;padding:12px 0 calc(12px + env(safe-area-inset-bottom))}
-.fbar .cin{background:rgba(32,19,66,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 6px 20px rgba(8,2,24,.35)}
-.fbar>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
-.fbar>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.chathead{position:sticky;top:0;z-index:6;margin:0 -16px;padding:env(safe-area-inset-top) 16px 4px;background:rgba(18,11,36,.32);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);-webkit-mask-image:linear-gradient(#000 calc(100% - 10px),transparent);mask-image:linear-gradient(#000 calc(100% - 10px),transparent)}
+.msg.fm.hasimg{padding:5px 5px 19px;max-width:75%}
+.msg.fm.hasimg .ftx,.msg.fm.hasimg .fwho,.msg.fm.hasimg .ffwd,.msg.fm.hasimg .fq{margin-left:8px;margin-right:8px}
+.msg.fm.hasimg .ftx{margin-top:6px}
+.fimg{display:block;width:100%;min-width:180px;max-height:320px;min-height:120px;object-fit:cover;border-radius:15px;background:rgba(255,255,255,.06)}
+.ffwd{font-size:12px;opacity:.8;font-style:italic;margin-bottom:3px}
+.fq{display:flex;flex-direction:column;border-left:3px solid currentColor;background:rgba(255,255,255,.1);border-radius:6px 10px 10px 6px;padding:4px 8px;margin:0 0 6px;max-width:100%;overflow:hidden}
+.msg.me .fq{background:rgba(255,255,255,.18)}
+.fq b{font-size:12.5px}.fq span{font-size:13px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fbar{padding:8px 0 calc(10px + env(safe-area-inset-bottom))}
+.frow{display:flex;gap:8px;align-items:flex-end}
+.fbar .cin{background:rgba(32,19,66,.92);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 6px 20px rgba(8,2,24,.35)}
+.frow>button{flex:none;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center}
+.frow>button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.frow>.fatt{background:rgba(32,19,66,.92);border:1px solid var(--line);box-shadow:none}
+.freply{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:8px 10px;border-radius:14px;background:rgba(32,19,66,.92);border:1px solid var(--line);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.freply i{font-style:normal;color:var(--brand);font-size:18px}
+.freply div{flex:1;min-width:0;display:flex;flex-direction:column;border-left:3px solid var(--brand);padding-left:8px}
+.freply b{font-size:13px;color:var(--brand)}.freply span{font-size:13px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.freply button{flex:none;width:32px;height:32px;padding:0;border-radius:50%;background:rgba(255,255,255,.08);box-shadow:none;color:var(--ink)}
+.fmenu button,.sheet [data-fwto]{margin-top:8px;text-align:left}
+.fmq{margin:6px 0 4px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.06);color:var(--mute);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chathead{margin:0 -16px;padding:env(safe-area-inset-top) 16px 4px}
 .chathead .top{margin-bottom:6px}
 .fpeople{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px;scrollbar-width:none}
 .fpeople::-webkit-scrollbar{display:none}
@@ -434,7 +457,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -896,7 +919,7 @@ function render() {
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
   const enter = S._enter ? ' enter-' + S._enter : '';
   S._enter = null;
-  $('#app').innerHTML = `<div class="wrap${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' || S.tab === 'chat' || (isRel() && S.tab === 'home') ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' || S.tab === 'chat' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
+  $('#app').innerHTML = `<div class="wrap${S.tab === 'chat' && S.msgsReady ? ' chatwrap' : ''}${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' || S.tab === 'chat' || (isRel() && S.tab === 'home') ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' || S.tab === 'chat' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
   if ($('#mic')) $('#mic').onclick = openVoice;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'buy' ? ($('#bin') && $('#bin').focus ? $('#bin').focus() : null) : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
@@ -3679,7 +3702,7 @@ function chatSub() {
   const u = famUnread();
   if (u) return 'Новых: ' + u;
   const last = S.msgs.slice(-1)[0];
-  return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + String(last.body).replace(/\s+/g, ' ').slice(0, 40) : 'Напишите родным';
+  return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + famSnip(last).slice(0, 40) : 'Напишите родным';
 }
 
 const FAM_COLORS = ['#f9a8d4', '#7df0c4', '#fcd34d', '#93c5fd', '#fdba74', '#c4b5fd'];
@@ -3697,90 +3720,290 @@ function famPeople() {
   const chip = (key, label) => { const u = famUnread(key); return `<button data-cw="${key}" class="${(S.chatWith || '') === key ? 'on' : ''}">${label}${u ? `<b>${u}</b>` : ''}</button>`; };
   return `<div class="fpeople">${chip('', '👨‍👩‍👧 Все')}${S.circle.filter(m => m.user_id !== S.user.id).map(m => chip(m.user_id, esc(m.name))).join('')}</div>`;
 }
+// превью сообщения одной строкой: для плитки, ответа, уведомления
+const famSnip = m => !m ? 'Сообщение удалено' : (m.photo_path ? '📷 ' + (String(m.body || '').trim() || 'Фото') : String(m.body || '')).replace(/\s+/g, ' ').trim().slice(0, 80);
+const CLIP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8.5 6l1.5-2.5h4L15.5 6"/></svg>';
 function famHtml() {
   const list = convMsgs();
   if (!list.length) return S.chatWith
     ? `<div class="card"><div class="empty">Личная переписка с ${esc(nameOf(S.chatWith))}.<br>Её видите только вы двое.</div></div>`
     : '<div class="card"><div class="empty">Здесь общий чат всей семьи.<br>Напишите первое сообщение.</div></div>';
   let out = '', lastDay = '';
-  const owner = S.me && S.me.role === 'owner' && !S.chatWith;
   list.forEach((m, i, arr) => {
     const day = famDay(m.created_at), newDay = day !== lastDay;
     if (newDay) { out += `<div class="fday">${esc(day)}</div>`; lastDay = day; }
     const mine = m.user_id === S.user.id, prev = arr[i - 1];
     const who = !mine && !S.chatWith && (newDay || !prev || prev.user_id !== m.user_id);
     const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    out += `<div class="mrow${mine ? ' me' : ''}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}"${(mine || owner) && !m._pending ? ` data-fm="${m.id}"` : ''}>`
+    const q = m.reply_to ? S.msgs.find(x => x.id === m.reply_to) : null;
+    out += `<div class="mrow${mine ? ' me' : ''}" id="fm-${m.id}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}${m.photo_path ? ' hasimg' : ''}"${m._pending ? '' : ` data-fm="${m.id}"`}>`
       + (who ? `<b class="fwho" style="color:${famColor(m.user_id)}">${esc(nameOf(m.user_id))}</b>` : '')
-      + linkify(esc(m.body)) + `<span class="ft">${m._pending ? '…' : time}</span></div></div>`;
+      + (m.fwd_from ? `<div class="ffwd">↪ Переслано от ${esc(nameOf(m.fwd_from))}</div>` : '')
+      + (m.reply_to ? `<div class="fq"${q ? ` data-jump="${q.id}"` : ''}><b style="color:${q ? famColor(q.user_id) : 'inherit'}">${q ? esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id)) : ''}</b><span>${esc(famSnip(q))}</span></div>` : '')
+      + (m.photo_path ? `<img class="fimg" ${m._local ? `src="${m._local}"` : `data-p="${esc(m.thumb_path || m.photo_path)}"`} data-full="${esc(m.photo_path)}" alt="Фото">` : '')
+      + (m.body ? `<div class="ftx">${linkify(esc(m.body))}</div>` : '')
+      + `<span class="ft">${m._pending ? '…' : time}</span></div></div>`;
   });
   return out;
+}
+function famBarHtml() {
+  const q = S.replyTo && S.msgs.find(x => x.id === S.replyTo);
+  return q ? `<div class="freply"><i>↩</i><div><b>${esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id))}</b><span>${esc(famSnip(q))}</span></div><button id="frx" aria-label="Отменить ответ">✕</button></div>` : '';
 }
 function renderFam() {
   if (!S.msgsReady) return '<div class="card"><b>Чат семьи</b><p class="mute">Выполните файл update-19.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
   if (S.chatWith && !S.circle.some(m => m.user_id === S.chatWith)) S.chatWith = null;
+  if (S.replyTo && !convMsgs().some(m => m.id === S.replyTo)) S.replyTo = null;
   return `<div class="fchat" id="fchat">${famHtml()}</div>
-  <div class="fbar"><div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea></div>
-    <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div>`;
+  <div class="fbar"><div id="frep">${famBarHtml()}</div>
+    <div class="frow"><button class="fatt" id="fatt" aria-label="Отправить фото">${CLIP_SVG}</button>
+      <div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea></div>
+      <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div></div>`;
 }
-const famBottom = () => { try { window.scrollTo(0, document.body.scrollHeight); } catch (e) {} };
-function drawFam() {
+// прокрутка ленты: вниз — после своего сообщения и при входе; если человек листает старые, новое его не дёргает
+function famBottom(force) {
+  const f = $('#fchat');
+  if (!f || f.scrollHeight === undefined) return;
+  if (force || f.scrollHeight - f.scrollTop - f.clientHeight < 160) f.scrollTop = f.scrollHeight;
+}
+// экран чата на всю высоту видимой области: поле ввода всегда внизу, и над клавиатурой тоже
+function chatLayout() {
+  const w = document.querySelector('.chatwrap'), vv = window.visualViewport;
+  if (!w || !w.style) return;
+  if (vv) { w.style.height = Math.round(vv.height) + 'px'; w.style.top = Math.round(vv.offsetTop || 0) + 'px'; }
+  if (!S.chatVvOn && vv && vv.addEventListener) {
+    S.chatVvOn = true;
+    const on = () => { if (document.querySelector('.chatwrap')) { chatLayout(); famBottom(); } };
+    vv.addEventListener('resize', on); vv.addEventListener('scroll', on);
+  }
+}
+async function hydrateFam() {
+  const paths = [...document.querySelectorAll('#fchat img[data-p]')].map(i => i.dataset.p);
+  if (!paths.length) return;
+  applyUrls();
+  await signUrls(paths);
+  applyUrls();
+  famBottom();
+}
+function drawFam(force) {
   if (!$('#fchat')) return;
   $('#fchat').innerHTML = famHtml();
   bindFamRows();
   famMarkSeen();
   const fp = document.querySelector('.fpeople');
   if (fp && fp.outerHTML !== undefined) { fp.outerHTML = famPeople(); bindFamPeople(); }
-  famBottom();
+  famBottom(force);
+  hydrateFam();
+}
+function drawReply() {
+  if (!$('#frep')) return;
+  $('#frep').innerHTML = famBarHtml();
+  if ($('#frx')) $('#frx').onclick = () => { S.replyTo = null; drawReply(); };
+}
+function startReply(id) {
+  S.replyTo = id;
+  drawReply();
+  if ($('#ftx') && $('#ftx').focus) $('#ftx').focus();
 }
 function bindFamRows() {
-  $('#app').querySelectorAll('[data-fm]').forEach(el => el.onclick = e => {
-    if (e && e.target && e.target.closest && e.target.closest('a')) return;
-    deleteFam(el.dataset.fm);
+  $('#app').querySelectorAll('[data-fm]').forEach(el => {
+    el.onclick = e => {
+      const t = e && e.target;
+      if (t && t.closest && t.closest('a')) return;
+      if (t && t.closest && t.closest('.fimg')) return openChatPhoto(t.closest('.fimg').dataset.full);
+      if (t && t.closest && t.closest('[data-jump]')) return famJump(t.closest('[data-jump]').dataset.jump);
+      openFamMenu(el.dataset.fm);
+    };
+    // смахнуть сообщение влево — ответить на него (как в Телеграме)
+    let x0 = null;
+    el.ontouchstart = e => { x0 = e.touches[0].clientX; };
+    el.ontouchend = e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (dx < -60) startReply(el.dataset.fm); };
   });
 }
+function famJump(id) {
+  const r = document.getElementById('fm-' + id);
+  if (!r) return;
+  if (r.scrollIntoView) r.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (r.classList) { r.classList.add('flash'); setTimeout(() => r.classList.remove('flash'), 1400); }
+}
 function bindFamPeople() {
-  $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; render(); });
+  $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; S.replyTo = null; render(); });
 }
 function bindFam() {
   if (!$('#ftx')) return;
   bindFamPeople();
   bindFamRows();
   famMarkSeen();
+  drawReply();
   const tx = $('#ftx');
   const fit = () => { if (tx.style) { tx.style.height = 'auto'; tx.style.height = Math.min(132, tx.scrollHeight || 0) + 'px'; } };
   tx.oninput = fit;
   tx.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendFam(); } };
   $('#fgo').onclick = sendFam;
-  setTimeout(famBottom, 0);
+  $('#fatt').onclick = pickChatPhoto;
+  try { window.scrollTo(0, 0); } catch (e) {}
+  chatLayout();
+  setTimeout(() => famBottom(true), 0);
+  hydrateFam();
+}
+// общая часть: черновик сообщения в текущую переписку (с ответом, если выбран)
+function famRow(extra) {
+  return { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body: '',
+    ...(S.chatWith ? { to_user: S.chatWith } : {}), ...(S.replyTo ? { reply_to: S.replyTo } : {}), ...extra };
+}
+async function famInsert(row, local) {
+  S.msgs.push({ ...row, created_at: new Date().toISOString(), _pending: true, ...(local || {}) });
+  drawFam(true);
+  const { error } = await sb.from('family_messages').insert(row);
+  if (error) { S.msgs = S.msgs.filter(x => x.id !== row.id); drawFam(); return error; }
+  const x = S.msgs.find(m => m.id === row.id);
+  if (x) { delete x._pending; delete x._local; }
+  drawFam();
+  loadMsgs();
+  return null;
 }
 async function sendFam() {
   const tx = $('#ftx');
   const body = (tx.value || '').trim().slice(0, 4000);
   if (!body) return;
-  const row = { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body, ...(S.chatWith ? { to_user: S.chatWith } : {}) };
-  S.msgs.push({ ...row, created_at: new Date().toISOString(), _pending: true });
+  const row = famRow({ body });
   tx.value = ''; if (tx.style) tx.style.height = 'auto';
-  drawFam();
+  S.replyTo = null; drawReply();
   if (tx.focus) tx.focus();
-  const { error } = await sb.from('family_messages').insert(row);
+  const error = await famInsert(row);
   if (error) {
-    S.msgs = S.msgs.filter(x => x.id !== row.id);
     if (!tx.value) tx.value = body;
-    drawFam();
     return toast(isNetErr(error) ? 'Нет связи: сообщение не отправлено' : 'Не отправилось: ' + error.message, 4000);
   }
-  const x = S.msgs.find(m => m.id === row.id);
-  if (x) delete x._pending;
-  drawFam();
-  loadMsgs();
+}
+
+// ---- фото в переписке: в галерею не попадают, лежат в папке chat (update-22.sql) ----
+function pickChatPhoto() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.style.display = 'none';
+  inp.onchange = () => { const f = [...inp.files].slice(0, 10); inp.remove(); if (f.length) sendChatPhotos(f); };
+  document.body.appendChild(inp);
+  inp.click();
+}
+async function uploadChatFile(id, blob, tblob) {
+  const hid = S.me.household_id;
+  const path = `${hid}/chat/${id}.jpg`, tpath = `${hid}/chat/${id}_t.jpg`;
+  let r = await bucket().upload(path, blob, { contentType: 'image/jpeg' });
+  if (r.error) throw r.error;
+  r = await bucket().upload(tpath, tblob, { contentType: 'image/jpeg' });
+  if (r.error) { await bucket().remove([path]); throw r.error; }
+  return { photo_path: path, thumb_path: tpath };
+}
+async function sendChatPhotos(files) {
+  const tx = $('#ftx');
+  let caption = tx ? (tx.value || '').trim().slice(0, 4000) : '';
+  if (tx) { tx.value = ''; if (tx.style) tx.style.height = 'auto'; }
+  let bad = 0, lastErr = '';
+  for (const f of files) {
+    let row = null, paths = null;
+    try {
+      const full = await toJpeg(f, 1600, .82), th = await toJpeg(f, 480, .75);
+      const id = crypto.randomUUID();
+      let local = '';                                // пока грузится, показываем фото с телефона
+      try { local = URL.createObjectURL(th.blob); } catch (e) {}
+      paths = await uploadChatFile(id, full.blob, th.blob);
+      row = famRow({ id, body: caption, ...paths });
+      caption = '';                                  // подпись — только к первому фото
+      S.replyTo = null; drawReply();
+      const error = await famInsert(row, { _local: local });
+      if (error) { await bucket().remove([paths.photo_path, paths.thumb_path]); throw error; }
+    } catch (e) { bad++; lastErr = isNetErr(e) ? 'нет связи' : ((e && e.message) || String(e)); }
+  }
+  if (bad) toast(`Не отправилось фото: ${bad} (${lastErr})`, 5000);
+}
+async function openChatPhoto(path) {
+  if (!path) return;
+  closeViewer();
+  viewerId = null;
+  const v = document.createElement('div');
+  v.className = 'viewer'; v.id = 'viewer';
+  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>Фото из переписки</span></div>
+    <div class="vi"><img id="vimg" data-p="${esc(path)}" alt="Фото"></div>
+    <div class="vb"><button class="ghost full" id="vs">Сохранить на телефон</button></div>`;
+  document.body.appendChild(v);
+  viewerOpen = true;
+  overlayOpened();
+  document.addEventListener('keydown', viewerKey);
+  v.querySelector('#vx').onclick = closeViewerUI;
+  v.querySelector('#vs').onclick = async () => {
+    const { data, error } = await bucket().createSignedUrl(path, 600);
+    if (error) return toast('Не удалось получить файл', 3000);
+    try {
+      const blob = await (await fetch(data.signedUrl)).blob();
+      const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    window.open(data.signedUrl, '_blank');
+  };
+  await signUrls([path]);
+  applyUrls();
+}
+
+// ---- меню сообщения: ответить, переслать, скопировать, удалить ----
+// удалить можно своё; создатель семьи — ещё и любое в общем чате (личные чужие ему и не видны)
+const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user));
+function openFamMenu(id) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m) return;
+  const canDel = famCanDel(m);
+  sheet(`<div class="fmenu"><div class="fmq">${esc(famSnip(m))}</div>
+    <button class="ghost full" id="mrep">↩ Ответить</button>
+    <button class="ghost full" id="mfwd">↪ Переслать</button>
+    ${m.body ? '<button class="ghost full" id="mcpy">📋 Скопировать текст</button>' : ''}
+    ${canDel ? '<button class="ghost full" id="mdel" style="color:var(--bad)">🗑 Удалить у всех</button>' : ''}</div>`);
+  $('#mrep').onclick = () => { closeSheet(); startReply(id); };
+  $('#mfwd').onclick = () => openForward(id);
+  if ($('#mcpy')) $('#mcpy').onclick = async () => {
+    try { await navigator.clipboard.writeText(m.body); toast('Текст скопирован'); } catch (e) { toast('Не удалось скопировать', 3000); }
+    closeSheet();
+  };
+  if ($('#mdel')) $('#mdel').onclick = () => { closeSheet(); deleteFam(id); };
+}
+function openForward(id) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m) return;
+  const opt = (key, label) => `<button class="ghost full" data-fwto="${key}">${label}</button>`;
+  sheet(`<b>Переслать в…</b><div class="fmq">${esc(famSnip(m))}</div>
+    ${opt('', '👨‍👩‍👧 Общий чат семьи')}${S.circle.filter(x => x.user_id !== S.user.id).map(x => opt(x.user_id, '👤 ' + esc(x.name) + ' · лично')).join('')}`);
+  document.querySelectorAll('[data-fwto]').forEach(b => b.onclick = () => forwardFam(id, b.dataset.fwto || null));
+}
+async function forwardFam(id, to) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m) return;
+  closeSheet();
+  S.chatWith = to; S.replyTo = null;
+  if (S.tab === 'chat') render(); else go('chat');
+  const t = toast('Пересылаем…', 0);
+  try {
+    const nid = crypto.randomUUID();
+    let paths = {};
+    if (m.photo_path) {
+      // копия файла: у пересланного своё фото, удаление исходного его не тронет
+      await signUrls([m.photo_path, m.thumb_path || m.photo_path]);
+      const get = async p => { const u = S.urls[p] && S.urls[p].url; if (!u) throw new Error('нет доступа к фото'); return (await fetch(u)).blob(); };
+      paths = await uploadChatFile(nid, await get(m.photo_path), await get(m.thumb_path || m.photo_path));
+    }
+    const row = { id: nid, household_id: S.me.household_id, user_id: S.user.id, body: m.body || '', ...paths,
+      ...(to ? { to_user: to } : {}), fwd_from: m.fwd_from || m.user_id };
+    const error = await famInsert(row);
+    if (error) { if (paths.photo_path) await bucket().remove([paths.photo_path, paths.thumb_path]); throw error; }
+    t.remove();
+    toast('Переслано' + (to ? ': ' + nameOf(to) : ' в общий чат'));
+  } catch (e) { t.remove(); toast('Не удалось переслать: ' + (isNetErr(e) ? 'нет связи' : (e.message || e)), 4000); }
 }
 async function deleteFam(id) {
   const m = S.msgs.find(x => x.id === id);
   if (!m || !confirm('Удалить сообщение у всех?')) return;
   const { error } = await sb.from('family_messages').delete().eq('id', id);
   if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 3500);
+  if (m.photo_path && m.user_id === S.user.id) bucket().remove([m.photo_path, m.thumb_path].filter(Boolean)).catch(() => {});
   S.msgs = S.msgs.filter(x => x.id !== id);
+  if (S.replyTo === id) { S.replyTo = null; drawReply(); }
   drawFam();
 }
 
