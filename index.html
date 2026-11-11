@@ -249,6 +249,10 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .fpop.fmenu2 button:active{background:rgba(255,255,255,.08)}
 .fpop.fmenu2 button.bad{color:var(--bad)}
 
+.msg.fm{touch-action:manipulation}
+.fheart{position:absolute;left:50%;top:50%;font-size:56px;line-height:1;pointer-events:none;transform:translate(-50%,-50%);animation:heartpop .8s ease-out forwards;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
+@keyframes heartpop{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}25%{transform:translate(-50%,-50%) scale(1.15);opacity:1}55%{transform:translate(-50%,-50%) scale(.95);opacity:1}100%{transform:translate(-50%,-90%) scale(1);opacity:0}}
+.fpq{padding:8px 14px 6px;color:var(--mute);font-size:13.5px}
 .mrow.lifted .msg{box-shadow:0 0 0 2px rgba(183,156,255,.6)}
 .fmenu button,.sheet [data-fwto]{margin-top:8px;text-align:left}
 .fmq{margin:6px 0 4px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.06);color:var(--mute);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -477,7 +481,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, reacts: [], recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, editId: null, reacts: [], hidden: new Set(), recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -705,6 +709,7 @@ function subscribe() {
   let ch = sb.channel('household-live');
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_messages' }, () => loadMsgs());
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_reactions' }, () => loadReacts());
+  ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_hidden' }, () => loadReacts());
   (isRel() ? ['photos'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
@@ -3711,10 +3716,11 @@ async function refreshRel(opts = {}) {
 
 // непрочитанные: время последнего увиденного сообщения хранится на телефоне
 const convOf = m => m.to_user ? (m.user_id === S.user.id ? m.to_user : m.user_id) : '';
-const convMsgs = (key = S.chatWith || '') => S.msgs.filter(m => convOf(m) === key);
+const famShown = () => S.msgs.filter(m => !(S.hidden && S.hidden.has(m.id)));    // без удалённых «у меня»
+const convMsgs = (key = S.chatWith || '') => famShown().filter(m => convOf(m) === key);
 const famSeenMap = () => { const o = lsGet('fb_fam_seen2'); if (o && typeof o === 'object') return o; let old = ''; try { old = localStorage.getItem('fb_fam_seen') || ''; } catch (e) {} return { '': old }; };
 // новых в одной переписке (key) или во всех (key не задан)
-const famUnread = key => { const seen = famSeenMap(); return S.msgs.filter(m => m.user_id !== S.user.id && !m._pending && (key === undefined || convOf(m) === key) && m.created_at > (seen[convOf(m)] || '')).length; };
+const famUnread = key => { const seen = famSeenMap(); return famShown().filter(m => m.user_id !== S.user.id && !m._pending && (key === undefined || convOf(m) === key) && m.created_at > (seen[convOf(m)] || '')).length; };
 function famMarkSeen() {
   const key = S.chatWith || '', last = convMsgs(key).filter(m => !m._pending).slice(-1)[0];
   if (!last) return;
@@ -3725,7 +3731,7 @@ function chatSub() {
   if (!S.msgsReady) return 'нужно обновить базу';
   const u = famUnread();
   if (u) return 'Новых: ' + u;
-  const last = S.msgs.slice(-1)[0];
+  const last = famShown().slice(-1)[0];
   return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + famSnip(last).slice(0, 40) : 'Напишите родным';
 }
 
@@ -3767,11 +3773,13 @@ function famHtml() {
       + (m.photo_path ? `<img class="fimg" ${m._local ? `src="${m._local}"` : `data-p="${esc(m.thumb_path || m.photo_path)}"`} data-full="${esc(m.photo_path)}" alt="Фото">` : '')
       + (m.body ? `<div class="ftx">${linkify(esc(m.body))}</div>` : '')
       + famReactsHtml(m.id)
-      + `<span class="ft">${m._pending ? '…' : time}</span></div></div>`;
+      + `<span class="ft">${m._pending ? '…' : (m.edited_at ? 'изм. ' : '') + time}</span></div></div>`;
   });
   return out;
 }
 function famBarHtml() {
+  const ed = S.editId && S.msgs.find(x => x.id === S.editId);
+  if (ed) return `<div class="freply"><i>✏️</i><div><b>Редактирование</b><span>${esc(famSnip(ed))}</span></div><button id="frx" aria-label="Отменить изменение">✕</button></div>`;
   const q = S.replyTo && S.msgs.find(x => x.id === S.replyTo);
   return q ? `<div class="freply"><i>↩</i><div><b>${esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id))}</b><span>${esc(famSnip(q))}</span></div><button id="frx" aria-label="Отменить ответ">✕</button></div>` : '';
 }
@@ -3824,9 +3832,10 @@ function drawFam(force) {
 function drawReply() {
   if (!$('#frep')) return;
   $('#frep').innerHTML = famBarHtml();
-  if ($('#frx')) $('#frx').onclick = () => { S.replyTo = null; drawReply(); };
+  if ($('#frx')) $('#frx').onclick = () => { if (S.editId) { S.editId = null; const tx = $('#ftx'); if (tx) { tx.value = ''; if (tx.style) tx.style.height = 'auto'; } } S.replyTo = null; drawReply(); };
 }
 function startReply(id) {
+  if (S.editId) { S.editId = null; if ($('#ftx')) $('#ftx').value = ''; }
   S.replyTo = id;
   drawReply();
   if ($('#ftx') && $('#ftx').focus) $('#ftx').focus();
@@ -3855,9 +3864,31 @@ function bindFamRows() {
       if (t && t.closest && t.closest('[data-rx]')) { const b = t.closest('[data-rx]'); return toggleReact(b.dataset.rx, b.dataset.e); }
       if (t && t.closest && t.closest('.fimg')) return openChatPhoto(t.closest('.fimg').dataset.full);
       if (t && t.closest && t.closest('[data-jump]')) return famJump(t.closest('[data-jump]').dataset.jump);
-      openReactBar(el.dataset.fm, el);
+      if (el._tap) { clearTimeout(el._tap); el._tap = null; return heartFam(el.dataset.fm); }
+      el._tap = setTimeout(() => { el._tap = null; openReactBar(el.dataset.fm, el); }, 250);
     };
   });
+}
+function startEdit(id) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m || !famCanEdit(m)) return;
+  S.editId = id; S.replyTo = null;
+  drawReply();
+  const tx = $('#ftx');
+  if (tx) { tx.value = m.body || ''; if (tx.oninput) tx.oninput(); if (tx.focus) tx.focus(); }
+}
+// сохранить изменённый текст
+async function saveEdit(body) {
+  const id = S.editId, m = S.msgs.find(x => x.id === id);
+  S.editId = null; drawReply();
+  if (!m) return;
+  if (!body && !m.photo_path) return toast('Пустым сообщение быть не может. Чтобы убрать его, зажмите и выберите «Удалить».', 4500);
+  if (body === (m.body || '')) return;
+  const prev = { body: m.body, edited_at: m.edited_at };
+  m.body = body; m.edited_at = new Date().toISOString();
+  drawFam();
+  const { error } = await sb.from('family_messages').update({ body, edited_at: m.edited_at }).eq('id', id);
+  if (error) { Object.assign(m, prev); drawFam(); toast(isNetErr(error) ? 'Нет связи: изменение не сохранено' : 'Не сохранилось: ' + error.message, 4000); }
 }
 function famJump(id) {
   const r = document.getElementById('fm-' + id);
@@ -3866,7 +3897,7 @@ function famJump(id) {
   if (r.classList) { r.classList.add('flash'); setTimeout(() => r.classList.remove('flash'), 1400); }
 }
 function bindFamPeople() {
-  $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; S.replyTo = null; render(); });
+  $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; S.replyTo = null; S.editId = null; render(); });
 }
 function bindFam() {
   if (!$('#ftx')) return;
@@ -3905,6 +3936,7 @@ async function famInsert(row, local) {
 async function sendFam() {
   const tx = $('#ftx');
   const body = (tx.value || '').trim().slice(0, 4000);
+  if (S.editId) { tx.value = ''; if (tx.style) tx.style.height = 'auto'; return saveEdit(body); }
   if (!body) return;
   const row = famRow({ body });
   tx.value = ''; if (tx.style) tx.style.height = 'auto';
@@ -3994,11 +4026,13 @@ function famReactsHtml(id) {
   return '<div class="freacts">' + groups.map(g => `<button data-rx="${id}" data-e="${esc(g.e)}" class="${g.mine ? 'on' : ''}" title="${esc(g.who.join(', '))}">${esc(g.e)}<span>${g.n > 1 || !S.chatWith ? g.n : ''}</span></button>`).join('') + '</div>';
 }
 async function loadReacts() {
-  const r = await sb.from('family_reactions').select('*').limit(5000);
-  if (r.error) return;
-  const before = JSON.stringify(S.reacts);
-  S.reacts = r.data || [];
-  if (JSON.stringify(S.reacts) !== before && S.tab === 'chat') drawFam();
+  const [r, hd] = await Promise.all([sb.from('family_reactions').select('*').limit(5000), sb.from('family_hidden').select('message_id').limit(5000)]);
+  const before = JSON.stringify([S.reacts, [...S.hidden]]);
+  if (!r.error) S.reacts = r.data || [];
+  if (!hd.error) S.hidden = new Set((hd.data || []).map(x => x.message_id));
+  if (JSON.stringify([S.reacts, [...S.hidden]]) !== before) {
+    if (S.tab === 'chat') drawFam(); else if ($('#chatsub')) $('#chatsub').textContent = chatSub();
+  }
 }
 async function toggleReact(id, emoji) {
   closeFamPop();
@@ -4014,6 +4048,20 @@ async function toggleReact(id, emoji) {
     ? await sb.from('family_reactions').delete().eq('message_id', id).eq('user_id', me)
     : await sb.from('family_reactions').upsert({ message_id: id, user_id: me, emoji }, { onConflict: 'message_id,user_id' });
   if (error) { S.reacts = prev; drawFam(); toast(isNetErr(error) ? 'Нет связи' : 'Реакция не сохранилась: ' + error.message, 3500); }
+}
+// двойное нажатие: ❤️ (повторное — снять), с большим сердечком на сообщении
+async function heartFam(id) {
+  closeFamPop();
+  const had = (S.reacts || []).some(r => r.message_id === id && r.user_id === S.user.id && r.emoji === '❤️');
+  const p = toggleReact(id, '❤️');
+  const row = document.getElementById('fm-' + id), msg = row && row.querySelector ? row.querySelector('.msg') : null;
+  if (!had && msg && msg.appendChild && document.createElement) {     // сердечко на сообщении — только когда ставим
+    const s = document.createElement('span');
+    s.className = 'fheart'; s.textContent = '❤️';
+    msg.appendChild(s);
+    setTimeout(() => s.remove(), 800);
+  }
+  return p;
 }
 // окошко у сообщения: над ним (или под ним, если сверху мало места), с той же стороны, что и пузырь
 function closeFamPop() {
@@ -4059,11 +4107,13 @@ function openReactBar(id, anchor) {
 // ---- меню сообщения: ответить, переслать, скопировать, удалить ----
 // удалить можно своё; создатель семьи — ещё и любое в общем чате (личные чужие ему и не видны)
 const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user));
+// изменить можно только своё и не пересланное
+const famCanEdit = m => !!m && m.user_id === S.user.id && !m.fwd_from && !m._pending;
 function openFamMenu(id, anchor) {
   const m = S.msgs.find(x => x.id === id);
   if (!m) return;
   const pop = famPop(`<button data-act="rep">↩ Ответить</button><button data-act="fwd">↪ Переслать</button>
-    ${m.body ? '<button data-act="cpy">📋 Скопировать</button>' : ''}${famCanDel(m) ? '<button data-act="del" class="bad">🗑 Удалить</button>' : ''}`, anchor, 'fmenu2');
+    ${famCanEdit(m) ? '<button data-act="edit">✏️ Изменить</button>' : ''}${m.body ? '<button data-act="cpy">📋 Скопировать</button>' : ''}<button data-act="del" class="bad">🗑 Удалить</button>`, anchor, 'fmenu2');
   if (!pop) return;
   pop.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
     const a = b.dataset.act;
@@ -4071,8 +4121,29 @@ function openFamMenu(id, anchor) {
     if (a === 'rep') startReply(id);
     else if (a === 'fwd') openForward(id);
     else if (a === 'cpy') { try { await navigator.clipboard.writeText(m.body); toast('Текст скопирован'); } catch (e) { toast('Не удалось скопировать', 3000); } }
-    else if (a === 'del') deleteFam(id);
+    else if (a === 'edit') startEdit(id);
+    else if (a === 'del') openDelete(id, anchor);
   });
+}
+function openDelete(id, anchor) {
+  const m = S.msgs.find(x => x.id === id);
+  if (!m) return;
+  const pop = famPop(`<div class="fpq">Удалить сообщение?</div><button data-del="me" class="bad">Удалить у меня</button>${famCanDel(m) ? '<button data-del="all" class="bad">Удалить у всех</button>' : ''}<button data-del="no">Отмена</button>`, anchor, 'fmenu2');
+  if (!pop) return;
+  pop.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    closeFamPop();
+    if (b.dataset.del === 'me') hideFam(id);
+    else if (b.dataset.del === 'all') deleteFam(id, true);
+  });
+}
+// «удалить у меня»: у остальных сообщение остаётся
+async function hideFam(id) {
+  S.hidden.add(id);
+  if (S.replyTo === id) S.replyTo = null;
+  if (S.editId === id) { S.editId = null; if ($('#ftx')) $('#ftx').value = ''; }
+  drawFam(); drawReply();
+  const { error } = await sb.from('family_hidden').insert({ message_id: id });
+  if (error && error.code !== '23505') { S.hidden.delete(id); drawFam(); toast(isNetErr(error) ? 'Нет связи' : 'Не удалось удалить: ' + error.message, 3500); }
 }
 function openForward(id) {
   const m = S.msgs.find(x => x.id === id);
@@ -4106,14 +4177,15 @@ async function forwardFam(id, to) {
     toast('Переслано' + (to ? ': ' + nameOf(to) : ' в общий чат'));
   } catch (e) { t.remove(); toast('Не удалось переслать: ' + (isNetErr(e) ? 'нет связи' : (e.message || e)), 4000); }
 }
-async function deleteFam(id) {
+async function deleteFam(id, asked) {
   const m = S.msgs.find(x => x.id === id);
-  if (!m || !confirm('Удалить сообщение у всех?')) return;
+  if (!m || !famCanDel(m) || (!asked && !confirm('Удалить сообщение у всех?'))) return;
   const { error } = await sb.from('family_messages').delete().eq('id', id);
   if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 3500);
   if (m.photo_path && m.user_id === S.user.id) bucket().remove([m.photo_path, m.thumb_path].filter(Boolean)).catch(() => {});
   S.msgs = S.msgs.filter(x => x.id !== id);
   if (S.replyTo === id) { S.replyTo = null; drawReply(); }
+  if (S.editId === id) { S.editId = null; if ($('#ftx')) $('#ftx').value = ''; drawReply(); }
   drawFam();
 }
 
