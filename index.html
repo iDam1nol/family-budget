@@ -253,6 +253,11 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .rxg button{height:38px;padding:0;background:none;box-shadow:none;font-size:23px;line-height:1;border-radius:10px;transition:transform .12s}
 .rxg button:active{transform:scale(1.3)}
 .rxg button.on{background:rgba(183,156,255,.3)}
+.cin .femo{flex:none;width:38px;height:38px;margin:5px 0;padding:0;border-radius:50%;background:none;box-shadow:none;display:grid;place-items:center;color:var(--mute)}
+.cin .femo svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.cin .femo.on{color:var(--brand);background:rgba(183,156,255,.15)}
+.fpop.emopanel{z-index:45;animation:popin .16s ease-out}
+.fpop.emopanel .rxall{max-height:min(300px,45vh)}
 .fpop.fmenu2{flex-direction:column;border-radius:16px;padding:6px;min-width:190px}
 .fpop.fmenu2 button{background:none;box-shadow:none;text-align:left;padding:11px 14px;border-radius:10px;font-size:15.5px;color:var(--ink)}
 .fpop.fmenu2 button:active{background:rgba(255,255,255,.08)}
@@ -941,6 +946,7 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
+  if (document.getElementById && document.getElementById('femopop')) closeEmo();
   if (isRel() && !REL_TABS.includes(S.tab)) S.tab = 'home';
   const titles = { chat: 'Чат семьи', tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
   let body = '';
@@ -3765,6 +3771,7 @@ function famPeople() {
 }
 // превью сообщения одной строкой: для плитки, ответа, уведомления
 const famSnip = m => !m ? 'Сообщение удалено' : (m.photo_path ? '📷 ' + (String(m.body || '').trim() || 'Фото') : String(m.body || '')).replace(/\s+/g, ' ').trim().slice(0, 80);
+const EMO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>';
 const CLIP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8.5 6l1.5-2.5h4L15.5 6"/></svg>';
 function famHtml() {
   const list = convMsgs();
@@ -3803,7 +3810,8 @@ function renderFam() {
   return `<div class="fchat" id="fchat">${famHtml()}</div>
   <div class="fbar"><div id="frep">${famBarHtml()}</div>
     <div class="frow"><button class="fatt" id="fatt" aria-label="Отправить фото">${CLIP_SVG}</button>
-      <div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea></div>
+      <div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea>
+        <button class="femo" id="femo" type="button" aria-label="Смайлики">${EMO_SVG}</button></div>
       <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div></div>`;
 }
 // прокрутка ленты: вниз — после своего сообщения и при входе; если человек листает старые, новое его не дёргает
@@ -3819,7 +3827,7 @@ function chatLayout() {
   if (vv) { w.style.height = Math.round(vv.height) + 'px'; w.style.top = Math.round(vv.offsetTop || 0) + 'px'; }
   if (!S.chatVvOn && vv && vv.addEventListener) {
     S.chatVvOn = true;
-    const on = () => { if (document.querySelector('.chatwrap')) { chatLayout(); famBottom(); } };
+    const on = () => { if (document.querySelector('.chatwrap')) { chatLayout(); famBottom(); placeEmo(); } };
     vv.addEventListener('resize', on); vv.addEventListener('scroll', on);
   }
 }
@@ -3924,6 +3932,9 @@ function bindFam() {
   tx.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendFam(); } };
   $('#fgo').onclick = sendFam;
   $('#fatt').onclick = pickChatPhoto;
+  if ($('#femo')) $('#femo').onclick = toggleEmo;
+  tx.onfocus = closeEmo;
+  tx.onblur = () => { if (typeof tx.selectionStart === 'number') S.emoCaret = tx.selectionStart; };
   if ($('#fchat')) $('#fchat').onscroll = () => { const f = $('#fchat'); if (document.getElementById('fpop') && S.popAt !== undefined && Math.abs(f.scrollTop - S.popAt) > 40) closeFamPop(); };
   try { window.scrollTo(0, 0); } catch (e) {}
   chatLayout();
@@ -3947,6 +3958,7 @@ async function famInsert(row, local) {
   return null;
 }
 async function sendFam() {
+  closeEmo();
   const tx = $('#ftx');
   const body = (tx.value || '').trim().slice(0, 4000);
   if (S.editId) { tx.value = ''; if (tx.style) tx.style.height = 'auto'; return saveEdit(body); }
@@ -4106,6 +4118,7 @@ function closeFamPop() {
 }
 function famPop(html, anchor, cls) {
   closeFamPop();
+  closeEmo();
   const bg = document.createElement('div');
   bg.className = 'fpopbg'; bg.id = 'fpop';
   bg.innerHTML = `<div class="fpop ${cls}">${html}</div>`;
@@ -4147,6 +4160,62 @@ function openReactAll(id, anchor, mine) {
     + REACT_ALL.map(([t, list]) => `<div class="rxh">${t}</div><div class="rxg">${list.map(btn).join('')}</div>`).join('') + '</div>', anchor, 'rxpanel');
   if (!pop) return;
   pop.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => toggleReact(id, b.dataset.pick));
+}
+
+// ---- смайлики в текст сообщения ----
+const EMO_DEF = ['😂', '❤️', '😍', '👍', '😊', '🙏', '🔥', '😘', '🥰', '😁', '🤣', '😉', '👏', '🎉', '😢', '😎'];
+function emoFrequent(k = 16) {
+  let o = {};
+  try { o = JSON.parse(localStorage.getItem('fb_emo_use') || '{}') || {}; } catch (e) {}
+  const top = Object.entries(o).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  return [...new Set([...top, ...EMO_DEF])].slice(0, k);
+}
+function emoUsed(e) {
+  try { const o = JSON.parse(localStorage.getItem('fb_emo_use') || '{}') || {}; o[e] = (+o[e] || 0) + 1; localStorage.setItem('fb_emo_use', JSON.stringify(o)); } catch (x) {}
+}
+function closeEmo() {
+  const p = document.getElementById ? document.getElementById('femopop') : null;
+  if (p) p.remove();
+  const b = $('#femo');
+  if (b && b.classList && b.classList.remove) b.classList.remove('on');
+}
+function placeEmo() {
+  const p = document.getElementById('femopop'), bar = document.querySelector('.fbar');
+  if (!p || !p.style || !bar || !bar.getBoundingClientRect) return;
+  const r = bar.getBoundingClientRect(), vw = window.innerWidth || 375;
+  const w = Math.min(r.width || vw - 32, vw - 16);
+  p.style.width = Math.round(w) + 'px';
+  p.style.left = Math.round(Math.max(8, Math.min(r.left, vw - w - 8))) + 'px';
+  p.style.top = Math.round(Math.max(8, r.top - (p.offsetHeight || 300) - 4)) + 'px';
+}
+function toggleEmo() {
+  if (document.getElementById('femopop')) return closeEmo();
+  closeFamPop();
+  const tx = $('#ftx');
+  if (tx) { S.emoCaret = typeof tx.selectionStart === 'number' ? tx.selectionStart : (tx.value || '').length; if (tx.blur) tx.blur(); }   // клавиатура уступает место смайликам
+  const btn = e => `<button data-emo="${e}">${e}</button>`;
+  const p = document.createElement('div');
+  p.id = 'femopop'; p.className = 'fpop rxpanel emopanel';
+  p.innerHTML = `<div class="rxall"><div class="rxh">Часто</div><div class="rxg">${emoFrequent().map(btn).join('')}</div>`
+    + REACT_ALL.map(([t, list]) => `<div class="rxh">${t}</div><div class="rxg">${list.map(btn).join('')}</div>`).join('') + '</div>';
+  document.body.appendChild(p);
+  if (p.querySelectorAll) p.querySelectorAll('[data-emo]').forEach(b => b.onclick = () => insertEmo(b.dataset.emo));
+  const b = $('#femo');
+  if (b && b.classList) b.classList.add('on');
+  placeEmo();
+  setTimeout(placeEmo, 350);                     // после того как спряталась клавиатура
+}
+// вставить смайлик туда, где стоял курсор (панель остаётся открытой — можно выбрать несколько)
+function insertEmo(e) {
+  const tx = $('#ftx');
+  if (!tx) return;
+  const v = tx.value || '';
+  const s = Math.min(typeof S.emoCaret === 'number' ? S.emoCaret : v.length, v.length);
+  tx.value = v.slice(0, s) + e + v.slice(s);
+  S.emoCaret = s + e.length;
+  if (tx.oninput) tx.oninput();
+  emoUsed(e);
+  placeEmo();
 }
 
 // ---- меню сообщения: ответить, переслать, скопировать, удалить ----
