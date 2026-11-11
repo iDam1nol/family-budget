@@ -662,9 +662,11 @@ function monthRange() {
 }
 const monthLabel = () => S.month.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 const nameOf = id => ((S.circle && S.circle.length ? S.circle : S.members).find(m => m.user_id === id) || {}).name || ((S.profiles || []).find(p => p.user_id === id) || {}).name || '—';
-// родственник: видит только чат семьи, галерею и помощника (update-19.sql закрывает ему остальное и в базе)
+// родственник: видит только чат семьи, галерею, помощника и свои дела (update-19.sql и update-26.sql закрывают ему остальное и в базе)
 const isRel = () => !!(S.me && S.me.role === 'relative');
-const REL_TABS = ['home', 'chat', 'photos', 'settings'];
+const REL_TABS = ['home', 'chat', 'photos', 'todo', 'settings'];
+// семья, куда пишутся дела: у родственника S.household не загружается
+const taskHh = () => S.household ? S.household.id : S.me ? S.me.household_id : null;
 // все, кто в семье (и родственники) -> S.circle; полноправные члены семьи -> S.members (фильтры, дела, «партнёр»)
 function setPeople(list) {
   S.circle = list || [];
@@ -884,7 +886,7 @@ function subscribe() {
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_hidden' }, () => loadReacts());
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => { loadSocial(); loadMsgs(); });
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, () => { loadSocial(); loadMsgs(); });
-  (isRel() ? ['photos'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
+  (isRel() ? ['photos', 'tasks'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
   ch.subscribe();
@@ -3678,7 +3680,7 @@ function taskMeta(t) {
   const td = today(), parts = [];
   if (t.due) parts.push(t.due < td && !t.done ? 'просрочено, ' + dayLabel(t.due) : t.due === td ? 'сегодня' : t.due === addDays(td, 1) ? 'завтра' : dayLabel(t.due));
   if (t.due_time) parts.push(t.due_time.slice(0, 5));
-  parts.push(t.assignee ? nameOf(t.assignee) : 'общее');
+  if (!isRel()) parts.push(t.assignee ? nameOf(t.assignee) : 'общее');
   if (t.repeat) parts.push('↻ ' + REPEAT[t.repeat].toLowerCase());
   return parts.join(' · ');
 }
@@ -3740,8 +3742,8 @@ function openTask(id, pre = {}) {
   sheet(`<b>${t ? 'Дело' : 'Новое дело'}</b>
     <input id="tt" value="${esc(v.title)}" placeholder="Что сделать, например: записать кота к врачу" maxlength="300">
     <div class="row" style="gap:8px"><input id="tdt" type="date" value="${esc(v.due || '')}" style="flex:1"><input id="ttm" type="time" value="${esc((v.due_time || '').slice(0, 5))}" style="width:116px"></div>
-    <div class="mute">Дату и время можно не указывать. Если указать время, за час придёт напоминание: общее дело — всем, своё — только тому, чьё оно.</div>
-    <select id="tas"><option value="">Общее</option>${S.members.map(m => `<option value="${m.user_id}"${m.user_id === v.assignee ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+    <div class="mute">${isRel() ? 'Дату и время можно не указывать. Если указать время, за час придёт напоминание. Ваши дела видите только вы.' : 'Дату и время можно не указывать. Если указать время, за час придёт напоминание: общее дело — всем, своё — только тому, чьё оно.'}</div>
+    <select id="tas"${isRel() ? ' hidden' : ''}><option value="">Общее</option>${S.members.map(m => `<option value="${m.user_id}"${m.user_id === v.assignee ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
     <select id="trp"><option value="">Не повторять</option>${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}"${k === v.repeat ? ' selected' : ''}>${l}</option>`).join('')}</select>
     <div class="err" id="err"></div>
     <button class="full" id="tsv">Сохранить</button>
@@ -3756,11 +3758,11 @@ function openTask(id, pre = {}) {
     const title = $('#tt').value.trim(), due = $('#tdt').value || null, time = $('#ttm').value || null, repeat = $('#trp').value || null;
     if (!title) return $('#err').textContent = 'Напишите, что сделать';
     if (time && !due) return $('#err').textContent = 'Для времени укажите и дату';
-    const row = { title, due, due_time: time, assignee: $('#tas').value || null };
+    const row = { title, due, due_time: time, assignee: isRel() ? S.user.id : $('#tas').value || null };
     if (repeat || (t && t.repeat)) row.repeat = repeat;     // поле только если повтор задан: до update-13.sql колонки нет
     $('#tsv').disabled = true;
     const { data, error } = t ? await sb.from('tasks').update(row).eq('id', id).select()
-      : await sb.from('tasks').insert({ household_id: S.household.id, ...row }).select();
+      : await sb.from('tasks').insert({ household_id: taskHh(), ...row }).select();
     $('#tsv').disabled = false;
     if (error) return $('#err').textContent = sqlHint(error);
     if (!data || !data.length) return $('#err').textContent = 'Не удалось сохранить';
@@ -3792,7 +3794,7 @@ async function toggleTask(id) {
   if (t.done && t.repeat) {
     const due = nextDue(t.due || today(), t.repeat);
     if (!S.tasks.some(x => !x.done && x.title === t.title && x.repeat === t.repeat && x.due === due)) {
-      const next = { household_id: S.household.id, title: t.title, due, due_time: t.due_time || null, assignee: t.assignee || null, repeat: t.repeat };
+      const next = { household_id: taskHh(), title: t.title, due, due_time: t.due_time || null, assignee: t.assignee || null, repeat: t.repeat };
       const { error: e2 } = await sb.from('tasks').insert(next);
       if (e2) return toast('Следующее дело не создалось: ' + e2.message, 5000);
       toast('Следующее: ' + dayLabel(due));
@@ -4061,10 +4063,11 @@ async function loadMsgs() {
   else if ($('#chatsub')) $('#chatsub').textContent = chatSub();
 }
 async function refreshRel(opts = {}) {
-  const [m, ph, fm] = await Promise.all([
+  const [m, ph, fm, tq] = await Promise.all([
     sb.from('members').select('*'),
     sb.from('photos').select('*').order('created_at', { ascending: false }).limit(600),
-    sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300)]);
+    sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300),
+    sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(500)]);
   if ([m, ph].some(x => x.error && isNetErr(x.error))) {
     const was = S.offline; S.offline = true;
     if (!was || !opts.poll) render();
@@ -4074,7 +4077,7 @@ async function refreshRel(opts = {}) {
   if (m.error) return fail(m.error);
   const wasOff = S.offline;
   S.offline = false;
-  const sig = JSON.stringify([m.data, ph.data, fm.data, wasOff]);
+  const sig = JSON.stringify([m.data, ph.data, fm.data, tq && tq.data, wasOff]);
   if (opts.poll && sig === S._sig) return;
   S._sig = sig;
   S.dataVer++;
@@ -4082,6 +4085,8 @@ async function refreshRel(opts = {}) {
   if (!S.me) return load();            // убрали из семьи: снова экран «Меня пригласили»
   S.photosReady = !ph.error;
   S.photos = (S.photosReady && ph.data) || [];
+  S.tasksReady = !!tq && !tq.error;
+  S.tasks = (S.tasksReady && tq.data) || [];
   setMsgs(fm);
   saveSnap();
   render();
@@ -4700,16 +4705,21 @@ function renderRelHome() {
   <div class="grid">
     <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чаты</b><span id="chatsub">${chatSub()}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
+    <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${relTodoSub()}</span></div></button>
     <button class="tile t1 wide" data-t="ai" id="aitile">${ICONS.ai}<div><b>Помощник</b><span>Спросите что угодно</span></div></button>
   </div>
   ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)"( id="\w+")?>/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
+}
+function relTodoSub() {
+  const tt = S.tasksReady ? todayTasks().length : 0;
+  return tt ? 'На сегодня: ' + tt : 'Календарь и список дел';
 }
 function renderRelSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span>
     <div class="mute" style="margin-top:6px">В семье: ${esc(S.circle.map(m => m.name).join(', '))}</div></div>
   ${nickCard()}
   <div class="card"><b>Уведомления</b>
-    <div class="mute">О новых сообщениях в чате семьи и личных сообщениях вам.</div>
+    <div class="mute">О новых сообщениях в чате семьи и личных сообщениях вам. За час до дела, у которого указано время.</div>
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
   <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
     <div class="mute">Настройка действует только на этом телефоне.</div></div>
@@ -4725,7 +4735,7 @@ function renderRelCard() {
   const rels = S.circle.filter(m => m.role === 'relative');
   const owner = S.me && S.me.role === 'owner';
   return `<div class="card"><b>Родственники</b>
-    <div class="mute">Видят только чат семьи, общие фото и помощника. Бюджет, дела, продукты и цели им недоступны.</div>
+    <div class="mute">Видят только чат семьи, общие фото, помощника и свой список дел (его видят только они). Бюджет, ваши дела, продукты и цели им недоступны.</div>
     ${rels.map(m => `<div class="relrow"><span>${esc(m.name)}</span>${owner ? `<button class="link" data-rmrel="${m.user_id}">Убрать</button>` : ''}</div>`).join('')}
     <button class="link" id="relinv" style="padding:8px 0 0">Пригласить родственника</button><div id="relbox"></div></div>`;
 }

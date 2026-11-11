@@ -4,7 +4,7 @@
 //     с телом {"mode":"remind"} (update-16.sql, раз в 5 минут) — напоминания о делах за час;
 //     с телом {"mode":"month"} (update-17.sql, 1-го числа) — итоги прошедшего месяца;
 //     с телом {"mode":"chat","id":...} (update-21.sql, триггер на новое сообщение) — уведомление о сообщении в чате семьи;
-//  Родственникам (members.role = 'relative') уходят только уведомления о сообщениях.
+//  Родственникам (members.role = 'relative') уходят только уведомления о сообщениях и напоминания о своих делах.
 //  2) кнопкой «Прислать проверочное» в приложении (вход пользователя): только на его телефоны.
 // Нужные секреты функции (Edge Functions -> Secrets): VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET.
 // Проверку JWT в настройках функции нужно выключить: функция проверяет вход сама.
@@ -250,7 +250,8 @@ Deno.serve(async (req: Request) => {
       let sq = db.from('push_subscriptions').select('*').eq('household_id', t.household_id);
       if (t.assignee) sq = sq.eq('user_id', t.assignee);      // своё дело — только себе, общее — всей семье
       const { data: list } = await sq;
-      for (const s of notRel(list)) {
+      // родственнику — только напоминание о его собственном деле (update-26.sql)
+      for (const s of (list || []).filter((x: any) => !rel.has(x.user_id) || (t.assignee && x.user_id === t.assignee))) {
         try {
           await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             JSON.stringify({ ...msg, url: './' }), { TTL: 3600 });
