@@ -230,6 +230,26 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .freply div{flex:1;min-width:0;display:flex;flex-direction:column;border-left:3px solid var(--brand);padding-left:8px}
 .freply b{font-size:13px;color:var(--brand)}.freply span{font-size:13px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .freply button{flex:none;width:32px;height:32px;padding:0;border-radius:50%;background:rgba(255,255,255,.08);box-shadow:none;color:var(--ink)}
+.freacts{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 0}
+.msg.fm.hasimg .freacts{margin:6px 8px 0}
+.freacts button{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;height:26px;border-radius:13px;background:rgba(255,255,255,.12);border:1px solid transparent;box-shadow:none;font-size:15px;line-height:1;color:inherit}
+.freacts button span{font-size:12px;font-weight:600}
+.freacts button.on{background:rgba(255,255,255,.3);border-color:rgba(255,255,255,.55)}
+.msg.ai .freacts button.on{background:rgba(183,156,255,.35);border-color:rgba(183,156,255,.7)}
+.freacts button.pop{animation:segpop .35s cubic-bezier(.34,1.56,.64,1)}
+.fpopbg{position:fixed;inset:0;z-index:40;background:transparent}
+.fpop{position:fixed;left:8px;top:40%;display:flex;width:max-content;max-width:calc(100vw - 16px);background:rgba(38,25,74,.97);border:1px solid var(--line);box-shadow:0 12px 34px rgba(0,0,0,.5);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);animation:popin .18s cubic-bezier(.34,1.56,.64,1)}
+@keyframes popin{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+.fpop.rxbar{border-radius:26px;padding:4px;gap:2px}
+.fpop.rxbar button{width:38px;height:38px;flex:none;padding:0;border-radius:50%;background:none;box-shadow:none;font-size:24px;line-height:1;transition:transform .12s}
+.fpop.rxbar button:active{transform:scale(1.3)}
+.fpop.rxbar button.on{background:rgba(183,156,255,.3)}
+.fpop.fmenu2{flex-direction:column;border-radius:16px;padding:6px;min-width:190px}
+.fpop.fmenu2 button{background:none;box-shadow:none;text-align:left;padding:11px 14px;border-radius:10px;font-size:15.5px;color:var(--ink)}
+.fpop.fmenu2 button:active{background:rgba(255,255,255,.08)}
+.fpop.fmenu2 button.bad{color:var(--bad)}
+
+.mrow.lifted .msg{box-shadow:0 0 0 2px rgba(183,156,255,.6)}
 .fmenu button,.sheet [data-fwto]{margin-top:8px;text-align:left}
 .fmq{margin:6px 0 4px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.06);color:var(--mute);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chathead{margin:0 -16px;padding:env(safe-area-inset-top) 16px 4px}
@@ -457,7 +477,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, reacts: [], recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -662,6 +682,7 @@ async function refresh(opts = {}) {
   setMsgs(fm);
   saveSnap();
   render();
+  loadReacts();
 }
 
 let pollTimer = null;
@@ -683,6 +704,7 @@ function subscribe() {
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
   let ch = sb.channel('household-live');
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_messages' }, () => loadMsgs());
+  ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_reactions' }, () => loadReacts());
   (isRel() ? ['photos'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
@@ -3648,6 +3670,7 @@ function setMsgs(r) {
   S.msgs = S.msgsReady ? (r.data || []).slice().reverse() : [];
 }
 async function loadMsgs() {
+  loadReacts();
   const r = await sb.from('family_messages').select('*').order('created_at', { ascending: false }).limit(300);
   if (r.error) return;
   const before = S.msgs.map(x => x.id).join();
@@ -3683,6 +3706,7 @@ async function refreshRel(opts = {}) {
   setMsgs(fm);
   saveSnap();
   render();
+  loadReacts();
 }
 
 // непрочитанные: время последнего увиденного сообщения хранится на телефоне
@@ -3742,6 +3766,7 @@ function famHtml() {
       + (m.reply_to ? `<div class="fq"${q ? ` data-jump="${q.id}"` : ''}><b style="color:${q ? famColor(q.user_id) : 'inherit'}">${q ? esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id)) : ''}</b><span>${esc(famSnip(q))}</span></div>` : '')
       + (m.photo_path ? `<img class="fimg" ${m._local ? `src="${m._local}"` : `data-p="${esc(m.thumb_path || m.photo_path)}"`} data-full="${esc(m.photo_path)}" alt="Фото">` : '')
       + (m.body ? `<div class="ftx">${linkify(esc(m.body))}</div>` : '')
+      + famReactsHtml(m.id)
       + `<span class="ft">${m._pending ? '…' : time}</span></div></div>`;
   });
   return out;
@@ -3793,6 +3818,7 @@ function drawFam(force) {
   const fp = document.querySelector('.fpeople');
   if (fp && fp.outerHTML !== undefined) { fp.outerHTML = famPeople(); bindFamPeople(); }
   famBottom(force);
+  if (S.popFor && document.getElementById('fpop')) { const r = document.getElementById('fm-' + S.popFor); if (r && r.classList) r.classList.add('lifted'); }
   hydrateFam();
 }
 function drawReply() {
@@ -3807,17 +3833,30 @@ function startReply(id) {
 }
 function bindFamRows() {
   $('#app').querySelectorAll('[data-fm]').forEach(el => {
+    let x0 = null, y0 = null, timer = null, long = false;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    el.ontouchstart = e => {
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; long = false;
+      cancel();
+      timer = setTimeout(() => { timer = null; long = true; if (navigator.vibrate) try { navigator.vibrate(12); } catch (x) {} openFamMenu(el.dataset.fm, el); }, 450);
+    };
+    el.ontouchmove = e => { if (x0 !== null && (Math.abs(e.touches[0].clientX - x0) > 10 || Math.abs(e.touches[0].clientY - y0) > 10)) cancel(); };
+    el.ontouchend = e => {
+      cancel();
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if (!long && dx < -60) { el._skip = true; startReply(el.dataset.fm); }    // смахнуть влево — ответить, как в Телеграме
+    };
+    el.oncontextmenu = e => { if (e && e.preventDefault) e.preventDefault(); if (!long) openFamMenu(el.dataset.fm, el); };   // на компьютере — правая кнопка
     el.onclick = e => {
+      if (long || el._skip) { long = false; el._skip = false; return; }
       const t = e && e.target;
       if (t && t.closest && t.closest('a')) return;
+      if (t && t.closest && t.closest('[data-rx]')) { const b = t.closest('[data-rx]'); return toggleReact(b.dataset.rx, b.dataset.e); }
       if (t && t.closest && t.closest('.fimg')) return openChatPhoto(t.closest('.fimg').dataset.full);
       if (t && t.closest && t.closest('[data-jump]')) return famJump(t.closest('[data-jump]').dataset.jump);
-      openFamMenu(el.dataset.fm);
+      openReactBar(el.dataset.fm, el);
     };
-    // смахнуть сообщение влево — ответить на него (как в Телеграме)
-    let x0 = null;
-    el.ontouchstart = e => { x0 = e.touches[0].clientX; };
-    el.ontouchend = e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (dx < -60) startReply(el.dataset.fm); };
   });
 }
 function famJump(id) {
@@ -3841,6 +3880,7 @@ function bindFam() {
   tx.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendFam(); } };
   $('#fgo').onclick = sendFam;
   $('#fatt').onclick = pickChatPhoto;
+  if ($('#fchat')) $('#fchat').onscroll = () => { const f = $('#fchat'); if (document.getElementById('fpop') && S.popAt !== undefined && Math.abs(f.scrollTop - S.popAt) > 40) closeFamPop(); };
   try { window.scrollTo(0, 0); } catch (e) {}
   chatLayout();
   setTimeout(() => famBottom(true), 0);
@@ -3944,25 +3984,95 @@ async function openChatPhoto(path) {
   applyUrls();
 }
 
+// ---- реакции (update-23.sql): одна от человека на сообщение, как в Телеграме ----
+const REACTS = ['❤️', '👍', '😂', '😮', '😢', '🔥', '🙏', '👏'];
+function famReactsHtml(id) {
+  const list = (S.reacts || []).filter(r => r.message_id === id);
+  if (!list.length) return '';
+  const groups = [];
+  list.forEach(r => { let g = groups.find(x => x.e === r.emoji); if (!g) groups.push(g = { e: r.emoji, n: 0, mine: false, who: [] }); g.n++; g.who.push(r.user_id === S.user.id ? 'Вы' : nameOf(r.user_id)); if (r.user_id === S.user.id) g.mine = true; });
+  return '<div class="freacts">' + groups.map(g => `<button data-rx="${id}" data-e="${esc(g.e)}" class="${g.mine ? 'on' : ''}" title="${esc(g.who.join(', '))}">${esc(g.e)}<span>${g.n > 1 || !S.chatWith ? g.n : ''}</span></button>`).join('') + '</div>';
+}
+async function loadReacts() {
+  const r = await sb.from('family_reactions').select('*').limit(5000);
+  if (r.error) return;
+  const before = JSON.stringify(S.reacts);
+  S.reacts = r.data || [];
+  if (JSON.stringify(S.reacts) !== before && S.tab === 'chat') drawFam();
+}
+async function toggleReact(id, emoji) {
+  closeFamPop();
+  const me = S.user.id, old = (S.reacts || []).find(r => r.message_id === id && r.user_id === me);
+  const prev = S.reacts.slice();
+  const off = old && old.emoji === emoji;
+  S.reacts = S.reacts.filter(r => !(r.message_id === id && r.user_id === me));
+  if (!off) S.reacts.push({ message_id: id, user_id: me, emoji, created_at: new Date().toISOString() });
+  drawFam();
+  const btn = document.querySelector(`[data-rx="${id}"][data-e="${emoji}"]`);
+  if (btn && btn.classList) btn.classList.add('pop');
+  const { error } = off
+    ? await sb.from('family_reactions').delete().eq('message_id', id).eq('user_id', me)
+    : await sb.from('family_reactions').upsert({ message_id: id, user_id: me, emoji }, { onConflict: 'message_id,user_id' });
+  if (error) { S.reacts = prev; drawFam(); toast(isNetErr(error) ? 'Нет связи' : 'Реакция не сохранилась: ' + error.message, 3500); }
+}
+// окошко у сообщения: над ним (или под ним, если сверху мало места), с той же стороны, что и пузырь
+function closeFamPop() {
+  S.popFor = null;
+  const p = document.getElementById('fpop');
+  if (p) p.remove();
+  document.querySelectorAll('.mrow.lifted').forEach(r => r.classList.remove('lifted'));
+}
+function famPop(html, anchor, cls) {
+  closeFamPop();
+  const bg = document.createElement('div');
+  bg.className = 'fpopbg'; bg.id = 'fpop';
+  bg.innerHTML = `<div class="fpop ${cls}">${html}</div>`;
+  bg.onclick = e => { if (e.target === bg) closeFamPop(); };
+  document.body.appendChild(bg);
+  const pop = bg.querySelector ? bg.querySelector('.fpop') : null;
+  const row = anchor && anchor.closest ? anchor.closest('.mrow') : null;
+  if (row && row.classList) row.classList.add('lifted');
+  S.popFor = row && row.id ? row.id.slice(3) : null;
+  S.popAt = $('#fchat') ? $('#fchat').scrollTop : 0;
+  if (!pop || !anchor || !anchor.getBoundingClientRect || !pop.getBoundingClientRect) return pop;
+  const r = anchor.getBoundingClientRect(), b = pop.getBoundingClientRect();
+  const p = { width: pop.offsetWidth || b.width, height: pop.offsetHeight || b.height };   // настоящий размер: окошко появляется с уменьшения
+  const vw = window.innerWidth || 375, vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 700;
+  const mine = row && row.classList && row.classList.contains('me');
+  const fc = $('#fchat') && $('#fchat').getBoundingClientRect ? $('#fchat').getBoundingClientRect() : null;
+  const maxR = Math.min(vw - 8, fc && fc.right ? fc.right : vw - 8);      // не дальше края ленты и экрана
+  let left = mine ? Math.min(r.right, maxR) - p.width : r.left;
+  left = Math.max(8, Math.min(left, maxR - p.width));
+  let top = r.top - p.height - 8;
+  if (top < 60) top = Math.min(r.bottom + 8, vh - p.height - 8);
+  pop.style.left = Math.round(left) + 'px';
+  pop.style.top = Math.round(Math.max(8, top)) + 'px';
+  return pop;
+}
+function openReactBar(id, anchor) {
+  const mine = ((S.reacts || []).find(r => r.message_id === id && r.user_id === S.user.id) || {}).emoji;
+  const pop = famPop(REACTS.map(e => `<button data-pick="${e}" class="${e === mine ? 'on' : ''}">${e}</button>`).join(''), anchor, 'rxbar');
+  if (!pop) return;
+  pop.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => toggleReact(id, b.dataset.pick));
+}
+
 // ---- меню сообщения: ответить, переслать, скопировать, удалить ----
 // удалить можно своё; создатель семьи — ещё и любое в общем чате (личные чужие ему и не видны)
 const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user));
-function openFamMenu(id) {
+function openFamMenu(id, anchor) {
   const m = S.msgs.find(x => x.id === id);
   if (!m) return;
-  const canDel = famCanDel(m);
-  sheet(`<div class="fmenu"><div class="fmq">${esc(famSnip(m))}</div>
-    <button class="ghost full" id="mrep">↩ Ответить</button>
-    <button class="ghost full" id="mfwd">↪ Переслать</button>
-    ${m.body ? '<button class="ghost full" id="mcpy">📋 Скопировать текст</button>' : ''}
-    ${canDel ? '<button class="ghost full" id="mdel" style="color:var(--bad)">🗑 Удалить у всех</button>' : ''}</div>`);
-  $('#mrep').onclick = () => { closeSheet(); startReply(id); };
-  $('#mfwd').onclick = () => openForward(id);
-  if ($('#mcpy')) $('#mcpy').onclick = async () => {
-    try { await navigator.clipboard.writeText(m.body); toast('Текст скопирован'); } catch (e) { toast('Не удалось скопировать', 3000); }
-    closeSheet();
-  };
-  if ($('#mdel')) $('#mdel').onclick = () => { closeSheet(); deleteFam(id); };
+  const pop = famPop(`<button data-act="rep">↩ Ответить</button><button data-act="fwd">↪ Переслать</button>
+    ${m.body ? '<button data-act="cpy">📋 Скопировать</button>' : ''}${famCanDel(m) ? '<button data-act="del" class="bad">🗑 Удалить</button>' : ''}`, anchor, 'fmenu2');
+  if (!pop) return;
+  pop.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.act;
+    closeFamPop();
+    if (a === 'rep') startReply(id);
+    else if (a === 'fwd') openForward(id);
+    else if (a === 'cpy') { try { await navigator.clipboard.writeText(m.body); toast('Текст скопирован'); } catch (e) { toast('Не удалось скопировать', 3000); } }
+    else if (a === 'del') deleteFam(id);
+  });
 }
 function openForward(id) {
   const m = S.msgs.find(x => x.id === id);
