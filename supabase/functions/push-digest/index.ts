@@ -103,15 +103,20 @@ function buildMonth(d) {
   else if ((d.cats || []).some(c => c.kind === 'expense' && +c.monthly_limit > 0)) lines.push('Все лимиты соблюдены 👍');
   return { title: 'Итоги ' + MONTH_GEN[mi], body: lines.join('\n'), tag: 'month-' + ym, url: './?itogi=' + ym };
 }
-// сообщение чата -> уведомление получателю. m: строка family_messages, from: имя автора
-function chatMsg(m, from) {
+// упомянут ли @ник в тексте
+const mentions = (body, nick) => !!nick && new RegExp('(^|[^\\w@])@' + nick + '(?![a-z0-9_])', 'i').test(body || '');
+// сообщение -> уведомление получателю. m: строка family_messages, from: имя автора,
+// x: { group: название группы, mention: получатель упомянут }
+function chatMsg(m, from, x = {}) {
   const words = String(m.body || '').replace(/\s+/g, ' ').trim();
   const text = (m.fwd_from ? '↪ ' : '') + (m.photo_path ? '📷 Фото' + (words ? ': ' + words : '') : words);
+  const where = m.chat_id ? (x.group ? x.group : 'лично') : m.to_user ? 'лично' : 'чат семьи';
+  const key = m.chat_id ? 'c:' + m.chat_id : m.to_user ? m.user_id : 'all';
   return {
-    title: m.to_user ? from + ' · лично' : from + ' · чат семьи',
+    title: x.mention ? from + ' упоминает вас' + (where === 'лично' ? '' : ' · ' + where) : from + ' · ' + where,
     body: text.length > 180 ? text.slice(0, 177) + '…' : text,
-    tag: 'chat-' + (m.to_user ? m.user_id : 'all'),
-    url: './?chat=' + (m.to_user ? m.user_id : 'all')
+    tag: 'chat-' + key,
+    url: './?chat=' + key
   };
 }
 // кому: личное — адресату, общее — всем в семье, кроме автора
@@ -166,13 +171,27 @@ Deno.serve(async (req: Request) => {
   if (cron && body && body.mode === 'chat') {
     const { data: m } = await db.from('family_messages').select('*').eq('id', body.id).maybeSingle();
     if (!m) return json({ sent: 0, note: 'нет такого сообщения' });
-    const { data: members } = await db.from('members').select('user_id,household_id,name').eq('household_id', m.household_id);
-    const from = ((members || []).find((x: any) => x.user_id === m.user_id) || {}).name || 'Семья';
-    const to = chatTargets(m, members || []);
+    let to: string[] = [], group: string | null = null, members: any[] = [];
+    if (m.chat_id) {
+      // чат мессенджера (update-25.sql): всем участникам, кроме автора
+      const [{ data: cms }, { data: ch }] = await Promise.all([
+        db.from('chat_members').select('user_id').eq('chat_id', m.chat_id), db.from('chats').select('kind,title').eq('id', m.chat_id).maybeSingle()]);
+      to = (cms || []).map((x: any) => x.user_id).filter((u: string) => u !== m.user_id);
+      if (ch && ch.kind === 'group') group = '«' + (ch.title || 'группа') + '»';
+    } else {
+      members = (await db.from('members').select('user_id,household_id,name').eq('household_id', m.household_id)).data || [];
+      to = chatTargets(m, members);
+    }
     if (!to.length) return json({ sent: 0 });
+    const { data: profs } = await db.from('profiles').select('user_id,nick,name').in('user_id', [m.user_id, ...to]);
+    const from = (members.find((x: any) => x.user_id === m.user_id) || {}).name || ((profs || []).find((p: any) => p.user_id === m.user_id) || {}).name || 'Семья';
     const { data: subs } = await db.from('push_subscriptions').select('*').in('user_id', to);
     let sent = 0, removed = 0;
-    for (const s of subs || []) { const r = await push(s, chatMsg(m, from), 24 * 3600); if (r > 0) sent++; if (r < 0) removed++; }
+    for (const s of subs || []) {
+      const nick = ((profs || []).find((p: any) => p.user_id === s.user_id) || {}).nick;
+      const r = await push(s, chatMsg(m, from, { group, mention: mentions(m.body, nick) }), 24 * 3600);
+      if (r > 0) sent++; if (r < 0) removed++;
+    }
     return json({ sent, removed });
   }
 

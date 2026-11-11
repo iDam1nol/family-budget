@@ -258,6 +258,29 @@ button.micsm.on{background:var(--bad);animation:micpulse 1.2s ease-out infinite}
 .cin .femo.on{color:var(--brand);background:rgba(183,156,255,.15)}
 .fpop.emopanel{z-index:45;animation:popin .16s ease-out}
 .fpop.emopanel .rxall{max-height:min(300px,45vh)}
+.fpeople .fadd{min-width:40px;justify-content:center;font-size:18px;padding:6px 12px}
+.fcinfo{font-size:13px;color:var(--mute);padding:0 4px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fcinfo .link{padding:0;font-size:13px}
+.fcinfo.warn{color:#fde68a}
+.fment{color:#c4b5fd;font-weight:600}
+.msg.me .fment{color:#fff;text-decoration:underline}
+.fment.me{background:rgba(196,181,253,.22);border-radius:6px;padding:0 3px}
+.msg.fm.mentioned{box-shadow:0 0 0 2px rgba(196,181,253,.55)}
+.fpop.fmentpop{z-index:46;flex-direction:column;border-radius:16px;padding:6px;min-width:220px;max-width:calc(100vw - 16px)}
+.fmentpop button{display:flex;align-items:baseline;gap:8px;background:none;box-shadow:none;text-align:left;padding:10px 12px;border-radius:10px;color:var(--ink)}
+.fmentpop button span{color:var(--mute);font-size:13px}
+.nickrow{display:flex;align-items:center;gap:4px;margin:8px 0}
+.nickrow span{font-size:18px;color:var(--brand);font-weight:700}
+.nickrow input{flex:1;margin:0}
+.qrbox{width:min(260px,70vw);aspect-ratio:1;margin:14px auto 6px;background:#fff;border-radius:16px;padding:10px;display:grid;place-items:center}
+.qrbox svg{width:100%;height:100%}
+.qrnick{text-align:center;font:700 20px/1.3 "Unbounded","Golos Text",sans-serif;margin-bottom:10px}
+.qrcam{position:relative}
+.qrcam video{width:100%;height:100%;object-fit:cover}
+.qrframe{position:absolute;left:50%;top:50%;width:min(64vw,260px);aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid rgba(255,255,255,.85);border-radius:22px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.gpick{margin:6px 0}
+.gpick i,.relrow i{font-style:normal}
+.gadm{font-size:11px;color:var(--brand);border:1px solid var(--brand);border-radius:8px;padding:0 5px;margin-left:4px}
 .fpop.fmenu2{flex-direction:column;border-radius:16px;padding:6px;min-width:190px}
 .fpop.fmenu2 button{background:none;box-shadow:none;text-align:left;padding:11px 14px;border-radius:10px;font-size:15.5px;color:var(--ink)}
 .fpop.fmenu2 button:active{background:rgba(255,255,255,.08)}
@@ -499,7 +522,7 @@ const S = { user: null, me: null, members: [], household: null, cats: [], tx: []
             tasks: [], tasksReady: false, todoSub: 'list', calDay: null,
             recipes: [], recipeItems: [], meals: [], menuReady: false, menuWeek: 0,
             shop: [], shopReady: false, q: '', found: null, foundKey: '', searchKey: '', foundLocal: false,
-            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, editId: null, reacts: [], hidden: new Set(), recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
+            circle: [], msgs: [], msgsReady: false, album: 'couple', chatWith: null, replyTo: null, editId: null, reacts: [], hidden: new Set(), profiles: [], chats: [], chatMembers: [], socialReady: false, recur: [], recurReady: false, bank: [], bankReady: false, txMonth: 0, hist: null, histFor: 0, histKey: '', histErr: false, dataVer: 0 };
 
 function monthRange() {
   const y = S.month.getFullYear(), m = S.month.getMonth();
@@ -508,7 +531,7 @@ function monthRange() {
   return [a, `${ny}-${pad(nm)}-01`];
 }
 const monthLabel = () => S.month.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-const nameOf = id => ((S.circle && S.circle.length ? S.circle : S.members).find(m => m.user_id === id) || {}).name || '—';
+const nameOf = id => ((S.circle && S.circle.length ? S.circle : S.members).find(m => m.user_id === id) || {}).name || ((S.profiles || []).find(p => p.user_id === id) || {}).name || '—';
 // родственник: видит только чат семьи, галерею и помощника (update-19.sql закрывает ему остальное и в базе)
 const isRel = () => !!(S.me && S.me.role === 'relative');
 const REL_TABS = ['home', 'chat', 'photos', 'settings'];
@@ -705,6 +728,7 @@ async function refresh(opts = {}) {
   saveSnap();
   render();
   loadReacts();
+  loadSocial();
 }
 
 let pollTimer = null;
@@ -728,6 +752,8 @@ function subscribe() {
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_messages' }, () => loadMsgs());
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_reactions' }, () => loadReacts());
   ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'family_hidden' }, () => loadReacts());
+  ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => { loadSocial(); loadMsgs(); });
+  ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, () => { loadSocial(); loadMsgs(); });
   (isRel() ? ['photos'] : ['transactions', 'categories', 'products', 'pantry_items', 'staples', 'stores', 'prices', 'bank_inbox', 'households', 'goals', 'goal_deposits', 'photos', 'category_rules', 'recurring_payments', 'tasks', 'recipes', 'recipe_items', 'meal_plan', 'shopping_items']).forEach(tb => {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, soon);
   });
@@ -770,9 +796,22 @@ function renderOnboarding() {
     <input id="n2" placeholder="Ваше имя">
     <input id="cd" placeholder="Код приглашения">
     <button class="full" id="jn">Присоединиться</button></div>
+  <div class="card"><b>Только мессенджер</b>
+    <div class="mute">Чаты и свой календарь с делами — без семейного бюджета.</div>
+    <input id="n3" placeholder="Ваше имя">
+    <div class="nickrow"><span>@</span><input id="nk3" placeholder="ник, например ivan_2026" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="32"></div>
+    <button class="full" id="ms">Начать</button></div>
   <div class="err" id="err"></div>
   <button class="link" id="lo">Выйти</button></div>`;
   $('#lo').onclick = () => sb.auth.signOut();
+  $('#ms').onclick = async () => {
+    const uname = $('#n3').value.trim(), nick = normNick($('#nk3').value);
+    if (!uname) return $('#err').textContent = 'Введите имя';
+    if (!NICK_RE.test(nick)) return $('#err').textContent = 'Ник: латинские буквы, цифры и «_», от 4 до 32 символов';
+    const { error } = await sb.rpc('create_personal', { uname, unick: nick });
+    if (error) return $('#err').textContent = /nick taken/.test(error.message) ? 'Этот ник уже занят, придумайте другой' : /bad nick/.test(error.message) ? 'Неподходящий ник' : error.message;
+    S.tab = 'chat'; load();
+  };
   $('#mk').onclick = async () => {
     const uname = $('#n1').value.trim(); if (!uname) return $('#err').textContent = 'Введите имя';
     const { error } = await sb.rpc('create_household', { hname: $('#hn').value.trim() || 'Семья', uname });
@@ -948,32 +987,35 @@ const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹<
 function render() {
   if (document.getElementById && document.getElementById('femopop')) closeEmo();
   if (isRel() && !REL_TABS.includes(S.tab)) S.tab = 'home';
-  const titles = { chat: 'Чат семьи', tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
+  if (isMsgr() && !MSG_TABS.includes(S.tab)) S.tab = 'home';
+  if (document.getElementById && document.getElementById('fment')) closeMention();
+  const titles = { chat: 'Чаты', tx: 'Операции', lim: 'Лимиты', food: 'Продукты', photos: 'Фото', more: 'Семья', todo: 'Дела', settings: 'Настройки' };
   let body = '';
-  if (S.tab === 'home') body = isRel() ? renderRelHome() : renderHome();
+  if (S.tab === 'home') body = isRel() ? renderRelHome() : isMsgr() ? renderMsgrHome() : renderHome();
   else {
     body = `<div class="top"><button class="ghost" id="bk">‹ Главная</button><b>${titles[S.tab]}</b>${KANJI[S.tab] ? `<span class="kj jpf" lang="ja" aria-hidden="true">${KANJI[S.tab]}</span>` : ''}</div>`;
     if (S.tab === 'tx') body += monthBar() + renderTx();
     else if (S.tab === 'lim') body += monthBar() + limSeg() + (S.limSub === 'goals' ? renderGoals() : S.limSub === 'recur' ? renderRecur() : S.limSub === 'charts' ? renderCharts() + `<button class="ghost full" id="sumopen">📊 Подробные итоги ${MONTH_GEN[S.month.getMonth()]}</button>` : renderLimits());
     else if (S.tab === 'food') body += renderFood();
     else if (S.tab === 'photos') body += renderPhotos();
-    else if (S.tab === 'settings') body += isRel() ? renderRelSettings() : renderSettings();
-    else if (S.tab === 'chat') body = `<div class="chathead">${body}${S.msgsReady ? famPeople() : ''}</div>` + renderFam();
+    else if (S.tab === 'settings') body += isRel() ? renderRelSettings() : isMsgr() ? renderMsgrSettings() : renderSettings();
+    else if (S.tab === 'chat') { if (S.msgsReady) famEnsure(); body = `<div class="chathead">${body}${S.msgsReady ? famPeople() : ''}</div>` + renderFam(); }
     else if (S.tab === 'todo') body += (S.todoSub === 'cal' ? monthBar() : '') + todoSeg() + (S.todoSub === 'cal' ? renderCal() : renderTodo());
     else body += renderMore();
   }
   // анимация только при смене экрана: обновления данных перерисовывают страницу незаметно
   const enter = S._enter ? ' enter-' + S._enter : '';
   S._enter = null;
-  $('#app').innerHTML = `<div class="wrap${S.tab === 'chat' && S.msgsReady ? ' chatwrap' : ''}${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' || S.tab === 'chat' || (isRel() && S.tab === 'home') ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' || S.tab === 'chat' ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
+  $('#app').innerHTML = `<div class="wrap${S.tab === 'chat' && S.msgsReady ? ' chatwrap' : ''}${enter}">${offlineBar()}${body}</div>${S.tab === 'more' || S.tab === 'settings' || S.tab === 'chat' || ((isRel() || isMsgr()) && S.tab === 'home') ? '' : '<button class="fab" id="add">+</button>'}${S.tab === 'settings' || S.tab === 'chat' || isMsgr() ? '' : `<button class="fab mic" id="mic" aria-label="Голосовой помощник">${MIC_SVG}</button>`}`;
   if ($('#mic')) $('#mic').onclick = openVoice;
   if ($('#pm')) { $('#pm').onclick = () => shiftMonth(-1); $('#nm').onclick = () => shiftMonth(1); }
   if ($('#add')) $('#add').onclick = () => S.tab === 'todo' ? (S.tasksReady ? openTask(null, { due: S.todoSub === 'cal' ? S.calDay : null }) : null) : S.tab === 'photos' ? pickPhotos() : S.tab === 'food' ? (!S.foodReady ? null : S.sub === 'buy' ? ($('#bin') && $('#bin').focus ? $('#bin').focus() : null) : S.sub === 'stock' ? openAddStock() : S.sub === 'menu' ? (S.menuReady ? openMealAdd(today()) : null) : openAddStaple()) : (S.tab === 'lim' && S.limSub === 'goals') ? openGoalForm(null) : (S.tab === 'lim' && S.limSub === 'recur' && S.recurReady) ? openRecurForm(null) : openAdd();
   if ($('#bk')) $('#bk').onclick = () => go('home');
   if ($('#retry')) $('#retry').onclick = () => refresh();
   if ($('#qfail')) $('#qfail').onclick = openFailed;
-  if (S.tab === 'home' && !isRel()) countUp();
-  if (S.tab === 'home') tickTrip();
+  if (S.tab === 'home' && !isRel() && !isMsgr()) countUp();
+  if (S.tab === 'settings') bindNick();
+  if (S.tab === 'home' && !isMsgr()) tickTrip();
   if (S.tab === 'chat') bindFam();
   if (S.tab === 'photos') hydratePhotos();
   if (S.tab === 'lim' && S.limSub === 'charts') hydrateCharts();
@@ -1084,7 +1126,7 @@ function renderHome() {
     <button class="tile t4" data-t="food">${ICONS.food}<div><b>Продукты</b><span>${S.foodReady ? (buyCount() ? 'Купить: ' + buyCount() : 'Всё есть') : 'нужно обновить базу'}</span></div></button>
     <button class="tile t3" data-t="more">${ICONS.more}<div><b>Семья</b><span>${S.inbox.length ? 'Разобрать: ' + S.inbox.length : esc(S.members.map(m => m.name).join(', '))}</span></div></button>
     <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${!S.tasksReady ? 'нужно обновить базу' : todayTasks().length ? 'На сегодня: ' + todayTasks().length : openTasks().length ? 'Всего дел: ' + openTasks().length : 'Дел нет'}</span></div></button>
-    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чат семьи</b><span id="chatsub">${chatSub()}</span></div></button>
+    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чаты</b><span id="chatsub">${chatSub()}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
   </div>
   ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)">/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
@@ -1242,6 +1284,7 @@ function renderMore() {
 
 function renderSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
+  ${nickCard()}
   <div class="card"><b>Уведомления</b>
     <div class="mute">Каждое утро в 9:00: дела на сегодня, платежи, продукты с истекающим сроком, превышенные лимиты. За час до дела, у которого указано время. И о новых сообщениях в чате семьи.</div>
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
@@ -3665,7 +3708,7 @@ try {
 } catch (e) {}
 // уведомление «Итоги месяца» открывает приложение со ссылкой ./?itogi=YYYY-MM
 function openChatFrom(c) {
-  S.chatWith = c && c !== 'all' && S.circle.some(m => m.user_id === c) ? c : null;
+  S.chatWith = c && c !== 'all' && (isChatKey(c) || S.circle.some(m => m.user_id === c)) ? c : null;
   if (S.tab === 'chat') render(); else go('chat');
 }
 function openFromUrl(url) {
@@ -3673,15 +3716,18 @@ function openFromUrl(url) {
   try { sp = new URL(url, location.href).searchParams; } catch (e) {}
   if (!sp) return;
   if (sp.get('chat')) return openChatFrom(sp.get('chat'));
+  if (sp.get('add')) return addByNick(sp.get('add'));
   if (isRel()) return;
   if (sp.get('itogi')) openSummary(sp.get('itogi'));
 }
 function openFromLaunch() {
   const s = location && typeof location.search === 'string' ? location.search : '';
-  const c = s.match(/[?&]chat=([\w-]+)/);
+  const c = s.match(/[?&]chat=([\w:-]+)/);
   const m = s.match(/[?&]itogi=(\d{4}-\d{2})/);
-  if (!m && !c) return;
+  const a = s.match(/[?&]add=@?([A-Za-z0-9_]{4,32})/);
+  if (!m && !c && !a) return;
   try { history.replaceState(history.state, '', location.pathname); } catch (e) {}
+  if (a) return addByNick(a[1]);
   if (c) return openChatFrom(c[1]);
   if (!isRel()) openSummary(m[1]);
 }
@@ -3731,10 +3777,11 @@ async function refreshRel(opts = {}) {
   saveSnap();
   render();
   loadReacts();
+  loadSocial();
 }
 
 // непрочитанные: время последнего увиденного сообщения хранится на телефоне
-const convOf = m => m.to_user ? (m.user_id === S.user.id ? m.to_user : m.user_id) : '';
+const convOf = m => m.chat_id ? 'c:' + m.chat_id : m.to_user ? (m.user_id === S.user.id ? m.to_user : m.user_id) : '';
 const famShown = () => S.msgs.filter(m => !(S.hidden && S.hidden.has(m.id)));    // без удалённых «у меня»
 const convMsgs = (key = S.chatWith || '') => famShown().filter(m => convOf(m) === key);
 const famSeenMap = () => { const o = lsGet('fb_fam_seen2'); if (o && typeof o === 'object') return o; let old = ''; try { old = localStorage.getItem('fb_fam_seen') || ''; } catch (e) {} return { '': old }; };
@@ -3751,11 +3798,11 @@ function chatSub() {
   const u = famUnread();
   if (u) return 'Новых: ' + u;
   const last = famShown().slice(-1)[0];
-  return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + famSnip(last).slice(0, 40) : 'Напишите родным';
+  return last ? (last.to_user ? '🔒 ' : '') + (last.user_id === S.user.id ? 'Вы' : nameOf(last.user_id)) + ': ' + famSnip(last).slice(0, 40) : isMsgr() ? 'Напишите кому-нибудь по @нику' : 'Напишите родным';
 }
 
 const FAM_COLORS = ['#f9a8d4', '#7df0c4', '#fcd34d', '#93c5fd', '#fdba74', '#c4b5fd'];
-const famColor = id => { const i = S.circle.findIndex(m => m.user_id === id); return FAM_COLORS[(i < 0 ? 0 : i) % FAM_COLORS.length]; };
+const famColor = id => { const i = S.circle.findIndex(m => m.user_id === id); if (i >= 0) return FAM_COLORS[i % FAM_COLORS.length]; let x = 0; for (const ch of String(id)) x = (x * 31 + ch.charCodeAt(0)) | 0; return FAM_COLORS[Math.abs(x) % FAM_COLORS.length]; };
 const linkify = s => s.replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 function famDay(iso) {
   const d = String(iso).slice(0, 10), loc = new Date(iso);
@@ -3767,7 +3814,10 @@ function famDay(iso) {
 // собеседники: общий чат и каждый член семьи, с числом новых
 function famPeople() {
   const chip = (key, label) => { const u = famUnread(key); return `<button data-cw="${key}" class="${(S.chatWith || '') === key ? 'on' : ''}">${label}${u ? `<b>${u}</b>` : ''}</button>`; };
-  return `<div class="fpeople">${chip('', '👨‍👩‍👧 Все')}${S.circle.filter(m => m.user_id !== S.user.id).map(m => chip(m.user_id, esc(m.name))).join('')}</div>`;
+  const fam = isMsgr() ? '' : chip('', '👨‍👩‍👧 Все') + S.circle.filter(m => m.user_id !== S.user.id).map(m => chip(m.user_id, esc(m.name))).join('');
+  const lastAt = c => { const l = famShown().filter(m => m.chat_id === c.id).slice(-1)[0]; return (l && l.created_at) || c.created_at || ''; };
+  const chats = (S.chats || []).slice().sort((a, b) => lastAt(b).localeCompare(lastAt(a))).map(c => chip('c:' + c.id, (c.kind === 'group' ? '👥 ' : '') + esc(chatTitle(c)))).join('');
+  return `<div class="fphead"><div class="fpeople">${fam}${chats}<button class="fadd" data-add aria-label="Новый чат">＋</button></div>${famInfo()}</div>`;
 }
 // превью сообщения одной строкой: для плитки, ответа, уведомления
 const famSnip = m => !m ? 'Сообщение удалено' : (m.photo_path ? '📷 ' + (String(m.body || '').trim() || 'Фото') : String(m.body || '')).replace(/\s+/g, ' ').trim().slice(0, 80);
@@ -3775,23 +3825,24 @@ const EMO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy=
 const CLIP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8.5 6l1.5-2.5h4L15.5 6"/></svg>';
 function famHtml() {
   const list = convMsgs();
-  if (!list.length) return S.chatWith
-    ? `<div class="card"><div class="empty">Личная переписка с ${esc(nameOf(S.chatWith))}.<br>Её видите только вы двое.</div></div>`
+  if (!list.length) return isGroupKey(S.chatWith) ? `<div class="card"><div class="empty">Это начало группы ${esc(convLabel(S.chatWith))}.<br>Напишите первое сообщение.</div></div>`
+    : S.chatWith
+    ? `<div class="card"><div class="empty">Личная переписка с ${esc(convLabel(S.chatWith))}.<br>Её видите только вы двое.</div></div>`
     : '<div class="card"><div class="empty">Здесь общий чат всей семьи.<br>Напишите первое сообщение.</div></div>';
   let out = '', lastDay = '';
   list.forEach((m, i, arr) => {
     const day = famDay(m.created_at), newDay = day !== lastDay;
     if (newDay) { out += `<div class="fday">${esc(day)}</div>`; lastDay = day; }
     const mine = m.user_id === S.user.id, prev = arr[i - 1];
-    const who = !mine && !S.chatWith && (newDay || !prev || prev.user_id !== m.user_id);
+    const who = !mine && (!S.chatWith || isGroupKey(S.chatWith)) && (newDay || !prev || prev.user_id !== m.user_id);
     const time = new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const q = m.reply_to ? S.msgs.find(x => x.id === m.reply_to) : null;
-    out += `<div class="mrow${mine ? ' me' : ''}" id="fm-${m.id}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}${m.photo_path ? ' hasimg' : ''}"${m._pending ? '' : ` data-fm="${m.id}"`}>`
+    out += `<div class="mrow${mine ? ' me' : ''}" id="fm-${m.id}"><div class="msg ${mine ? 'me' : 'ai'} fm${m._pending ? ' pend' : ''}${m.photo_path ? ' hasimg' : ''}${!mine && mentionsMe(m.body) ? ' mentioned' : ''}"${m._pending ? '' : ` data-fm="${m.id}"`}>`
       + (who ? `<b class="fwho" style="color:${famColor(m.user_id)}">${esc(nameOf(m.user_id))}</b>` : '')
       + (m.fwd_from ? `<div class="ffwd">↪ Переслано от ${esc(nameOf(m.fwd_from))}</div>` : '')
       + (m.reply_to ? `<div class="fq"${q ? ` data-jump="${q.id}"` : ''}><b style="color:${q ? famColor(q.user_id) : 'inherit'}">${q ? esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id)) : ''}</b><span>${esc(famSnip(q))}</span></div>` : '')
       + (m.photo_path ? `<img class="fimg" ${m._local ? `src="${m._local}"` : `data-p="${esc(m.thumb_path || m.photo_path)}"`} data-full="${esc(m.photo_path)}" alt="Фото">` : '')
-      + (m.body ? `<div class="ftx">${linkify(esc(m.body))}</div>` : '')
+      + (m.body ? `<div class="ftx">${mentionize(linkify(esc(m.body)))}</div>` : '')
       + famReactsHtml(m.id)
       + `<span class="ft">${m._pending ? '…' : (m.edited_at ? 'изм. ' : '') + time}</span></div></div>`;
   });
@@ -3803,14 +3854,24 @@ function famBarHtml() {
   const q = S.replyTo && S.msgs.find(x => x.id === S.replyTo);
   return q ? `<div class="freply"><i>↩</i><div><b>${esc(q.user_id === S.user.id ? 'Вы' : nameOf(q.user_id))}</b><span>${esc(famSnip(q))}</span></div><button id="frx" aria-label="Отменить ответ">✕</button></div>` : '';
 }
+// выбранная переписка существует; у пользователя мессенджера по умолчанию — чат с последним сообщением
+function famEnsure() {
+  if (isChatKey(S.chatWith)) { if (S.socialReady && !chatById(S.chatWith.slice(2))) S.chatWith = null; }
+  else if (S.chatWith && !S.circle.some(m => m.user_id === S.chatWith)) S.chatWith = null;
+  if (isMsgr() && !S.chatWith && (S.chats || []).length) {
+    const last = famShown().filter(m => m.chat_id && chatById(m.chat_id)).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).slice(-1)[0];
+    S.chatWith = 'c:' + (last ? last.chat_id : S.chats[S.chats.length - 1].id);
+  }
+}
 function renderFam() {
   if (!S.msgsReady) return '<div class="card"><b>Чат семьи</b><p class="mute">Выполните файл update-19.sql в Supabase (SQL Editor → New query → Run), затем обновите приложение.</p></div>';
-  if (S.chatWith && !S.circle.some(m => m.user_id === S.chatWith)) S.chatWith = null;
+  famEnsure();
+  if (isMsgr() && !S.chatWith) return `<div class="fchat" id="fchat"><div class="card"><div class="empty">Здесь будут ваши чаты.<br>Напишите человеку по его @нику или отсканируйте QR-код.</div><button class="full" data-add>＋ Новый чат</button></div></div>`;
   if (S.replyTo && !convMsgs().some(m => m.id === S.replyTo)) S.replyTo = null;
   return `<div class="fchat" id="fchat">${famHtml()}</div>
   <div class="fbar"><div id="frep">${famBarHtml()}</div>
     <div class="frow"><button class="fatt" id="fatt" aria-label="Отправить фото">${CLIP_SVG}</button>
-      <div class="cin"><textarea id="ftx" rows="1" placeholder="${S.chatWith ? 'Лично для: ' + esc(nameOf(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea>
+      <div class="cin"><textarea id="ftx" rows="1" placeholder="${isGroupKey(S.chatWith) ? 'Сообщение в ' + esc(convLabel(S.chatWith)) + '…' : S.chatWith ? 'Лично для: ' + esc(convLabel(S.chatWith)) : 'Сообщение семье…'}" maxlength="4000" enterkeyhint="send"></textarea>
         <button class="femo" id="femo" type="button" aria-label="Смайлики">${EMO_SVG}</button></div>
       <button id="fgo" aria-label="Отправить">${SEND_SVG}</button></div></div>`;
 }
@@ -3844,7 +3905,7 @@ function drawFam(force) {
   $('#fchat').innerHTML = famHtml();
   bindFamRows();
   famMarkSeen();
-  const fp = document.querySelector('.fpeople');
+  const fp = document.querySelector('.fphead');
   if (fp && fp.outerHTML !== undefined) { fp.outerHTML = famPeople(); bindFamPeople(); }
   famBottom(force);
   if (S.popFor && document.getElementById('fpop')) { const r = document.getElementById('fm-' + S.popFor); if (r && r.classList) r.classList.add('lifted'); }
@@ -3919,16 +3980,22 @@ function famJump(id) {
 }
 function bindFamPeople() {
   $('#app').querySelectorAll('[data-cw]').forEach(b => b.onclick = () => { S.chatWith = b.dataset.cw || null; S.replyTo = null; S.editId = null; render(); });
+  $('#app').querySelectorAll('[data-add]').forEach(b => b.onclick = openContacts);
+  const on = document.querySelector('.fpeople .on');        // выбранная переписка видна в ряду
+  if (on && on.scrollIntoView) try { on.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
+  $('#app').querySelectorAll('[data-nick]').forEach(b => b.onclick = openNickSheet);
+  $('#app').querySelectorAll('[data-ginfo]').forEach(b => b.onclick = () => openGroupInfo(b.dataset.ginfo));
 }
 function bindFam() {
-  if (!$('#ftx')) return;
   bindFamPeople();
+  if (!$('#ftx')) return;
   bindFamRows();
   famMarkSeen();
   drawReply();
   const tx = $('#ftx');
   const fit = () => { if (tx.style) { tx.style.height = 'auto'; tx.style.height = Math.min(132, tx.scrollHeight || 0) + 'px'; } };
-  tx.oninput = fit;
+  tx.oninput = () => { fit(); mentionSuggest(); };
+  tx.onkeyup = e => { if (e && /^Arrow|^Home|^End/.test(e.key || '')) mentionSuggest(); };
   tx.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendFam(); } };
   $('#fgo').onclick = sendFam;
   $('#fatt').onclick = pickChatPhoto;
@@ -3943,8 +4010,8 @@ function bindFam() {
 }
 // общая часть: черновик сообщения в текущую переписку (с ответом, если выбран)
 function famRow(extra) {
-  return { id: crypto.randomUUID(), household_id: S.me.household_id, user_id: S.user.id, body: '',
-    ...(S.chatWith ? { to_user: S.chatWith } : {}), ...(S.replyTo ? { reply_to: S.replyTo } : {}), ...extra };
+  return { id: crypto.randomUUID(), user_id: S.user.id, body: '', ...famTarget(S.chatWith),
+    ...(S.replyTo ? { reply_to: S.replyTo } : {}), ...extra };
 }
 async function famInsert(row, local) {
   S.msgs.push({ ...row, created_at: new Date().toISOString(), _pending: true, ...(local || {}) });
@@ -3959,6 +4026,7 @@ async function famInsert(row, local) {
 }
 async function sendFam() {
   closeEmo();
+  closeMention();
   const tx = $('#ftx');
   const body = (tx.value || '').trim().slice(0, 4000);
   if (S.editId) { tx.value = ''; if (tx.style) tx.style.height = 'auto'; return saveEdit(body); }
@@ -3982,9 +4050,9 @@ function pickChatPhoto() {
   document.body.appendChild(inp);
   inp.click();
 }
-async function uploadChatFile(id, blob, tblob) {
-  const hid = S.me.household_id;
-  const path = `${hid}/chat/${id}.jpg`, tpath = `${hid}/chat/${id}_t.jpg`;
+async function uploadChatFile(id, blob, tblob, key = S.chatWith) {
+  const dir = isChatKey(key) ? 'chats/' + key.slice(2) : S.me.household_id + '/chat';      // фото чата — в папке этого чата
+  const path = `${dir}/${id}.jpg`, tpath = `${dir}/${id}_t.jpg`;
   let r = await bucket().upload(path, blob, { contentType: 'image/jpeg' });
   if (r.error) throw r.error;
   r = await bucket().upload(tpath, tblob, { contentType: 'image/jpeg' });
@@ -4220,7 +4288,7 @@ function insertEmo(e) {
 
 // ---- меню сообщения: ответить, переслать, скопировать, удалить ----
 // удалить можно своё; создатель семьи — ещё и любое в общем чате (личные чужие ему и не видны)
-const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user));
+const famCanDel = m => !!m && (m.user_id === S.user.id || (!!S.me && S.me.role === 'owner' && !m.to_user && !m.chat_id));
 // изменить можно только своё и не пересланное
 const famCanEdit = m => !!m && m.user_id === S.user.id && !m.fwd_from && !m._pending;
 // автор видит в меню своего сообщения, кто какую реакцию поставил
@@ -4276,7 +4344,7 @@ function openForward(id) {
   if (!m) return;
   const opt = (key, label) => `<button class="ghost full" data-fwto="${key}">${label}</button>`;
   sheet(`<b>Переслать в…</b><div class="fmq">${esc(famSnip(m))}</div>
-    ${opt('', '👨‍👩‍👧 Общий чат семьи')}${S.circle.filter(x => x.user_id !== S.user.id).map(x => opt(x.user_id, '👤 ' + esc(x.name) + ' · лично')).join('')}`);
+    ${isMsgr() ? '' : opt('', '👨‍👩‍👧 Общий чат семьи') + S.circle.filter(x => x.user_id !== S.user.id).map(x => opt(x.user_id, '👤 ' + esc(x.name) + ' · лично')).join('')}${(S.chats || []).map(c => opt('c:' + c.id, (c.kind === 'group' ? '👥 ' : '💬 ') + esc(chatTitle(c)))).join('')}`);
   document.querySelectorAll('[data-fwto]').forEach(b => b.onclick = () => forwardFam(id, b.dataset.fwto || null));
 }
 async function forwardFam(id, to) {
@@ -4293,14 +4361,13 @@ async function forwardFam(id, to) {
       // копия файла: у пересланного своё фото, удаление исходного его не тронет
       await signUrls([m.photo_path, m.thumb_path || m.photo_path]);
       const get = async p => { const u = S.urls[p] && S.urls[p].url; if (!u) throw new Error('нет доступа к фото'); return (await fetch(u)).blob(); };
-      paths = await uploadChatFile(nid, await get(m.photo_path), await get(m.thumb_path || m.photo_path));
+      paths = await uploadChatFile(nid, await get(m.photo_path), await get(m.thumb_path || m.photo_path), to);
     }
-    const row = { id: nid, household_id: S.me.household_id, user_id: S.user.id, body: m.body || '', ...paths,
-      ...(to ? { to_user: to } : {}), fwd_from: m.fwd_from || m.user_id };
+    const row = { id: nid, user_id: S.user.id, body: m.body || '', ...paths, ...famTarget(to), fwd_from: m.fwd_from || m.user_id };
     const error = await famInsert(row);
     if (error) { if (paths.photo_path) await bucket().remove([paths.photo_path, paths.thumb_path]); throw error; }
     t.remove();
-    toast('Переслано' + (to ? ': ' + nameOf(to) : ' в общий чат'));
+    toast('Переслано: ' + convLabel(to));
   } catch (e) { t.remove(); toast('Не удалось переслать: ' + (isNetErr(e) ? 'нет связи' : (e.message || e)), 4000); }
 }
 async function deleteFam(id, asked) {
@@ -4321,7 +4388,7 @@ function renderRelHome() {
     ${GEAR_BTN}</div>
   ${renderTrip()}
   <div class="grid">
-    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чат семьи</b><span id="chatsub">${chatSub()}</span></div></button>
+    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чаты</b><span id="chatsub">${chatSub()}</span></div></button>
     <button class="tile t5 wide" data-t="photos">${ICONS.photos}<div><b>Фото</b><span>${S.photosReady ? (S.photos.length ? 'Снимков: ' + S.photos.length : 'Пока пусто, добавьте первое') : 'нужно обновить базу'}</span></div></button>
     <button class="tile t1 wide" data-t="ai" id="aitile">${ICONS.ai}<div><b>Помощник</b><span>Спросите что угодно</span></div></button>
   </div>
@@ -4330,6 +4397,7 @@ function renderRelHome() {
 function renderRelSettings() {
   return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span>
     <div class="mute" style="margin-top:6px">В семье: ${esc(S.circle.map(m => m.name).join(', '))}</div></div>
+  ${nickCard()}
   <div class="card"><b>Уведомления</b>
     <div class="mute">О новых сообщениях в чате семьи и личных сообщениях вам.</div>
     <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
@@ -4358,6 +4426,336 @@ async function removeRelative(uid) {
   const { error } = await sb.rpc('remove_relative', { p_user: uid });
   if (error) return toast(isNetErr(error) ? 'Нет связи' : error.message, 3500);
   refresh();
+}
+
+// ---------- мессенджер (update-25.sql): @ники, контакты, личные чаты и группы ----------
+// Пользователь «только мессенджер» — владелец своей отдельной «семьи» вида personal: у него только чаты и свои дела.
+const isMsgr = () => !!(S.household && S.household.kind === 'personal');
+const MSG_TABS = ['home', 'chat', 'todo', 'settings'];
+const NICK_RE = /^[a-z0-9_]{4,32}$/;
+const normNick = s => String(s || '').trim().replace(/^@/, '').toLowerCase();
+const profOf = id => (S.profiles || []).find(p => p.user_id === id);
+const nickOf = id => (profOf(id) || {}).nick || '';
+const myNick = () => nickOf(S.user.id);
+const isChatKey = k => typeof k === 'string' && k.slice(0, 2) === 'c:';
+const chatById = id => (S.chats || []).find(c => c.id === id);
+const chatMembersOf = id => (S.chatMembers || []).filter(m => m.chat_id === id);
+const isGroupKey = k => isChatKey(k) && ((chatById(k.slice(2)) || {}).kind === 'group');
+function chatTitle(c) {
+  if (!c) return 'Чат';
+  if (c.kind === 'group') return c.title || 'Группа';
+  const o = chatMembersOf(c.id).find(m => m.user_id !== S.user.id);
+  return o ? nameOf(o.user_id) : 'Чат';
+}
+// подпись переписки: общий чат, человек из семьи или чат
+const convLabel = k => !k ? 'общий чат семьи' : isChatKey(k) ? (isGroupKey(k) ? '«' + chatTitle(chatById(k.slice(2))) + '»' : chatTitle(chatById(k.slice(2)))) : nameOf(k);
+// где лежит сообщение: в семье (household_id, при личном — to_user) или в чате (chat_id)
+const famTarget = k => isChatKey(k) ? { chat_id: k.slice(2), household_id: null } : { household_id: S.me.household_id, ...(k ? { to_user: k } : {}) };
+// все знакомые: семья и собеседники по чатам (для групп и упоминаний)
+function knownPeople() {
+  const ids = new Set([...(S.circle || []).map(m => m.user_id), ...(S.chatMembers || []).map(m => m.user_id)]);
+  ids.delete(S.user.id);
+  return [...ids];
+}
+async function loadSocial() {
+  const [p, c, m] = await Promise.all([sb.from('profiles').select('*'), sb.from('chats').select('*').order('created_at'), sb.from('chat_members').select('*')]);
+  const before = JSON.stringify([S.profiles, S.chats, S.chatMembers]);
+  if (!p.error) S.profiles = p.data || [];
+  if (!c.error) S.chats = c.data || [];
+  if (!m.error) S.chatMembers = m.data || [];
+  S.socialReady = !c.error && !p.error;
+  if (JSON.stringify([S.profiles, S.chats, S.chatMembers]) === before) return;
+  if (S.tab === 'chat') { if (isMsgr() && !$('#ftx')) render(); else drawFam(); }
+  else if (S.tab === 'settings' && $('#nickbox')) drawNickBox();
+  else if ($('#chatsub')) $('#chatsub').textContent = chatSub();
+}
+
+// ---- @ник: в настройках у всех ----
+const nickBoxHtml = () => `<b>Ваш @ник</b>
+    <div class="mute">По нику вас находят и упоминают в чатах. Латинские буквы, цифры и «_», от 4 символов.</div>
+    <div class="nickrow"><span>@</span><input id="nkin" value="${esc(myNick())}" placeholder="например, ${esc(nickSuggest())}" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="32"></div>
+    <div class="err" id="nkerr"></div>
+    <button class="full" id="nksave">${myNick() ? 'Сохранить' : 'Придумать ник'}</button>
+    ${myNick() ? '<button class="ghost full" id="myqr">🔳 Мой QR-код</button>' : ''}`;
+const nickCard = () => `<div class="card" id="nickbox">${nickBoxHtml()}</div>`;
+const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+function nickSuggest() {
+  const base = String((S.me && S.me.name) || 'user').toLowerCase().split('').map(ch => TRANSLIT[ch] !== undefined ? TRANSLIT[ch] : ch).join('').replace(/[^a-z0-9_]/g, '');
+  return (base.length >= 4 ? base : (base + '_family')).slice(0, 24);
+}
+function drawNickBox() { if ($('#nickbox')) { $('#nickbox').innerHTML = nickBoxHtml(); bindNick(); } }
+function bindNick() {
+  if ($('#nksave')) $('#nksave').onclick = () => saveNick($('#nkin').value, $('#nkerr'));
+  if ($('#myqr')) $('#myqr').onclick = openMyQr;
+}
+async function saveNick(v, errEl) {
+  const n = normNick(v);
+  const say = t => { if (errEl) errEl.textContent = t; else toast(t, 3500); };
+  if (!NICK_RE.test(n)) return say('Ник: латинские буквы, цифры и «_», от 4 до 32 символов');
+  if (n === myNick()) return say('');
+  const { error } = await sb.from('profiles').upsert({ user_id: S.user.id, nick: n, name: (S.me && S.me.name) || n }, { onConflict: 'user_id' });
+  if (error) return say(error.code === '23505' ? 'Этот ник уже занят, придумайте другой' : isNetErr(error) ? 'Нет связи' : error.message);
+  say('');
+  toast('Ваш ник: @' + n);
+  await loadSocial();
+  return true;
+}
+function openNickSheet() {
+  sheet(`<div class="card" id="nickbox" style="margin:0">${nickBoxHtml()}</div>`);
+  if ($('#nksave')) $('#nksave').onclick = async () => { if (await saveNick($('#nkin').value, $('#nkerr'))) closeSheet(); };
+  if ($('#myqr')) $('#myqr').onclick = openMyQr;
+}
+
+// ---- QR-код: свой (ссылка ?add=ник) и сканер ----
+// библиотеки грузятся только когда открыт QR: сам QR рисует qrcode-generator, читает — встроенный BarcodeDetector или jsQR
+const QR_LIB = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+const JSQR_LIB = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const old = document.querySelector(`script[data-src="${src}"]`);
+    if (old) { if (old.dataset.ok) return res(); old.addEventListener('load', () => res()); old.addEventListener('error', () => rej(new Error('нет связи'))); return; }
+    const s = document.createElement('script');
+    s.src = src; s.dataset.src = src;
+    s.onload = () => { s.dataset.ok = '1'; res(); };
+    s.onerror = () => rej(new Error('нет связи'));
+    document.head.appendChild(s);
+  });
+}
+const addLink = nick => location.origin + location.pathname + '?add=' + nick;
+const qrNick = t => { const s = String(t || ''); const m = s.match(/[?&]add=@?([A-Za-z0-9_]{4,32})/) || s.trim().match(/^@?([A-Za-z0-9_]{4,32})$/); return m ? m[1].toLowerCase() : null; };
+async function openMyQr() {
+  const n = myNick();
+  if (!n) return openNickSheet();
+  sheet(`<b>Мой QR-код</b>
+    <div class="mute">Покажите код: человек наведёт камеру телефона или отсканирует его в приложении («Чаты» → ＋ → «Сканировать QR»).</div>
+    <div class="qrbox" id="qrbox"><span class="mute">Рисуем код…</span></div>
+    <div class="qrnick">@${esc(n)}</div>
+    <button class="ghost full" id="qrshare">Поделиться ссылкой</button>`);
+  $('#qrshare').onclick = async () => {
+    const url = addLink(n);
+    try { if (navigator.share) await navigator.share({ title: 'Напишите мне', text: 'Мой ник: @' + n, url }); else { await navigator.clipboard.writeText(url); toast('Ссылка скопирована'); } } catch (e) {}
+  };
+  try {
+    await loadScript(QR_LIB);
+    const qr = window.qrcode(0, 'M');
+    qr.addData(addLink(n)); qr.make();
+    if ($('#qrbox')) $('#qrbox').innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  } catch (e) { if ($('#qrbox')) $('#qrbox').innerHTML = '<span class="mute">Не удалось нарисовать код: нет связи. Ник выше можно продиктовать.</span>'; }
+}
+async function scanQr() {
+  closeSheet();
+  closeViewer();
+  viewerId = null;
+  const v = document.createElement('div');
+  v.className = 'viewer'; v.id = 'viewer';
+  v.innerHTML = `<div class="vt"><button class="ghost" id="vx">Закрыть</button><span>Наведите камеру на QR-код</span></div>
+    <div class="vi qrcam"><video id="qrv" playsinline muted autoplay></video><div class="qrframe"></div></div>
+    <div class="vb"><div class="mute" id="qrst">Включаем камеру…</div></div>`;
+  document.body.appendChild(v);
+  viewerOpen = true;
+  overlayOpened();
+  let stream = null, stop = false;
+  const done = () => { stop = true; if (stream) stream.getTracks().forEach(t => t.stop()); };
+  v.querySelector('#vx').onclick = () => { done(); closeViewerUI(); };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    const video = v.querySelector('#qrv');
+    video.srcObject = stream;
+    await video.play();
+    let det = null;
+    if ('BarcodeDetector' in window) { try { det = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) {} }
+    if (!det) await loadScript(JSQR_LIB);
+    if ($('#qrst')) $('#qrst').textContent = 'Ищем код…';
+    const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+    const tick = async () => {
+      if (stop || !document.getElementById('viewer')) return done();
+      let text = null;
+      try {
+        if (det) { const r = await det.detect(video); if (r && r[0]) text = r[0].rawValue; }
+        else if (video.videoWidth) {
+          const w = Math.min(640, video.videoWidth), h = Math.round(video.videoHeight * w / video.videoWidth);
+          c.width = w; c.height = h; x.drawImage(video, 0, 0, w, h);
+          const r = window.jsQR(x.getImageData(0, 0, w, h).data, w, h);
+          if (r) text = r.data;
+        }
+      } catch (e) {}
+      const nick = text && qrNick(text);
+      if (nick) { done(); closeViewerUI(); return addByNick(nick); }
+      if (text && $('#qrst')) $('#qrst').textContent = 'Это не код из нашего приложения';
+      setTimeout(tick, 250);
+    };
+    tick();
+  } catch (e) {
+    if ($('#qrst')) $('#qrst').textContent = 'Нет доступа к камере. Разрешите камеру для приложения в настройках телефона или найдите человека по @нику.';
+  }
+}
+
+// ---- новый чат: по нику, по QR, группа ----
+function openContacts() {
+  closeEmo();
+  sheet(`<b>Новый чат</b>
+    ${myNick() ? '' : '<div class="fcinfo warn" style="margin:8px 0">Сначала придумайте себе @ник — по нему вас найдут и смогут упомянуть. <button class="link" id="cnick">Придумать</button></div>'}
+    <div class="mute" style="margin-top:6px">Напишите человеку по его @нику</div>
+    <div class="nickrow"><span>@</span><input id="fnick" placeholder="ник человека" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="33"></div>
+    <div class="err" id="ferr"></div>
+    <button class="full" id="ffind">Найти и написать</button>
+    <div class="row" style="gap:8px;margin-top:8px"><button class="ghost" id="fscan">📷 Сканировать QR</button><button class="ghost" id="fmyqr">🔳 Мой QR-код</button></div>
+    <button class="ghost full" id="fgroup">👥 Создать группу</button>`);
+  if ($('#cnick')) $('#cnick').onclick = openNickSheet;
+  $('#ffind').onclick = () => addByNick($('#fnick').value, $('#ferr'));
+  $('#fnick').onkeydown = e => { if (e.key === 'Enter') addByNick($('#fnick').value, $('#ferr')); };
+  $('#fscan').onclick = scanQr;
+  $('#fmyqr').onclick = openMyQr;
+  $('#fgroup').onclick = openNewGroup;
+}
+// найти по нику и открыть переписку: свой из семьи — личные сообщения в семье, остальные — личный чат
+async function addByNick(v, errEl) {
+  const n = normNick(v);
+  const say = t => { if (errEl) errEl.textContent = t; else toast(t, 3500); };
+  if (!NICK_RE.test(n)) return say('Введите ник: латинские буквы, цифры и «_», от 4 символов');
+  const { data, error } = await sb.rpc('find_by_nick', { p_nick: n });
+  if (error) return say(isNetErr(error) ? 'Нет связи' : error.message);
+  const p = (data || [])[0];
+  if (!p) return say('Нет пользователя @' + n + '. Проверьте ник.');
+  if (p.user_id === S.user.id) return say('Это ваш собственный ник');
+  let key;
+  if ((S.circle || []).some(m => m.user_id === p.user_id) && !isMsgr()) key = p.user_id;
+  else {
+    const r = await sb.rpc('open_direct', { p_nick: n });
+    if (r.error) return say(isNetErr(r.error) ? 'Нет связи' : r.error.message);
+    key = 'c:' + r.data;
+    await loadSocial();
+  }
+  closeSheet();
+  S.chatWith = key; S.replyTo = null; S.editId = null;
+  if (S.tab === 'chat') render(); else go('chat');
+  toast('Переписка с ' + p.name);
+}
+function openNewGroup() {
+  const people = knownPeople();
+  sheet(`<b>Новая группа</b>
+    <input id="gtitle" placeholder="Название, например «Друзья»" maxlength="60">
+    <div class="mute" style="margin:8px 0 4px">Кого добавить</div>
+    ${people.length ? people.map(id => `<label class="chk gpick"><input type="checkbox" value="${id}"><span>${esc(nameOf(id))}${nickOf(id) ? ` <i>@${esc(nickOf(id))}</i>` : ''}</span></label>`).join('') : '<div class="mute">Пока никого: сначала напишите людям по @нику — потом их можно будет добавить в группу.</div>'}
+    <div class="err" id="gerr"></div>
+    <button class="full" id="gmake">Создать группу</button>`);
+  $('#gmake').onclick = async () => {
+    const title = $('#gtitle').value.trim();
+    if (!title) return $('#gerr').textContent = 'Придумайте название группы';
+    const users = [...document.querySelectorAll('.gpick input:checked')].map(i => i.value);
+    const { data, error } = await sb.rpc('create_group', { p_title: title, p_users: users });
+    if (error) return $('#gerr').textContent = isNetErr(error) ? 'Нет связи' : error.message;
+    await loadSocial();
+    closeSheet();
+    S.chatWith = 'c:' + data; S.replyTo = null;
+    if (S.tab === 'chat') render(); else go('chat');
+  };
+}
+function openGroupInfo(cid) {
+  const c = chatById(cid);
+  if (!c) return;
+  const mem = chatMembersOf(cid), admin = mem.some(m => m.user_id === S.user.id && m.role === 'admin');
+  const others = knownPeople().filter(id => !mem.some(m => m.user_id === id));
+  sheet(`<b>👥 ${esc(chatTitle(c))}</b>
+    ${admin ? `<div class="row" style="gap:8px;margin-top:8px"><input id="gname" value="${esc(c.title || '')}" maxlength="60" style="flex:1;margin:0"><button class="ghost" id="gren">Переименовать</button></div>` : ''}
+    <div class="mute" style="margin:10px 0 4px">Участники: ${mem.length}</div>
+    ${mem.map(m => `<div class="relrow"><span>${esc(m.user_id === S.user.id ? 'Вы' : nameOf(m.user_id))}${nickOf(m.user_id) ? ` <i class="mute">@${esc(nickOf(m.user_id))}</i>` : ''}${m.role === 'admin' ? ' <i class="gadm">админ</i>' : ''}</span>${admin && m.user_id !== S.user.id ? `<button class="link" data-gkick="${m.user_id}">Убрать</button>` : ''}</div>`).join('')}
+    ${admin && others.length ? `<div class="row" style="gap:8px;margin-top:8px"><select id="gaddsel" style="flex:1;margin:0">${others.map(id => `<option value="${id}">${esc(nameOf(id))}${nickOf(id) ? ' @' + esc(nickOf(id)) : ''}</option>`).join('')}</select><button class="ghost" id="gadd">Добавить</button></div>` : ''}
+    <button class="ghost full" id="gleave" style="color:var(--bad);margin-top:12px">Выйти из группы</button>`);
+  const after = async (r, msg) => { if (r.error) return toast(isNetErr(r.error) ? 'Нет связи' : r.error.message, 3500); if (msg) toast(msg); await loadSocial(); };
+  if ($('#gren')) $('#gren').onclick = async () => { await after(await sb.rpc('group_rename', { p_chat: cid, p_title: $('#gname').value }), 'Группа переименована'); openGroupInfo(cid); };
+  if ($('#gadd')) $('#gadd').onclick = async () => { await after(await sb.rpc('group_add', { p_chat: cid, p_user: $('#gaddsel').value })); openGroupInfo(cid); };
+  document.querySelectorAll('[data-gkick]').forEach(b => b.onclick = async () => {
+    if (!confirm('Убрать ' + nameOf(b.dataset.gkick) + ' из группы?')) return;
+    await after(await sb.rpc('group_remove', { p_chat: cid, p_user: b.dataset.gkick })); openGroupInfo(cid);
+  });
+  $('#gleave').onclick = async () => {
+    if (!confirm('Выйти из группы «' + chatTitle(c) + '»? Переписка у вас пропадёт.')) return;
+    const r = await sb.rpc('group_remove', { p_chat: cid, p_user: S.user.id });
+    if (r.error) return toast(isNetErr(r.error) ? 'Нет связи' : r.error.message, 3500);
+    closeSheet();
+    S.chatWith = null;
+    await loadSocial(); loadMsgs();
+    render();
+  };
+}
+// строка под собеседниками: кто это / группа / подсказка придумать ник
+function famInfo() {
+  const k = S.chatWith;
+  if (S.socialReady && !myNick()) return '<div class="fcinfo warn">Придумайте себе @ник — по нему вас найдут и смогут упомянуть. <button class="link" data-nick>Придумать</button></div>';
+  if (isGroupKey(k)) return `<div class="fcinfo">👥 ${esc(chatTitle(chatById(k.slice(2))))} · участников: ${chatMembersOf(k.slice(2)).length} <button class="link" data-ginfo="${k.slice(2)}">Участники</button></div>`;
+  if (isChatKey(k)) { const o = chatMembersOf(k.slice(2)).find(m => m.user_id !== S.user.id); return o ? `<div class="fcinfo">${esc(nameOf(o.user_id))}${nickOf(o.user_id) ? ' · @' + esc(nickOf(o.user_id)) : ''}</div>` : ''; }
+  return '';
+}
+
+// ---- упоминания @ник ----
+function mentionize(html) {
+  return html.split(/(<a [^>]*>[\s\S]*?<\/a>)/).map((part, i) => i % 2 ? part : part.replace(/(^|[^\w@])@([a-z0-9_]{4,32})(?![a-z0-9_])/gi, (all, pre, nick) => {
+    const p = (S.profiles || []).find(x => x.nick === nick.toLowerCase());
+    return p ? `${pre}<span class="fment${p.user_id === S.user.id ? ' me' : ''}">@${esc(p.nick)}</span>` : all;
+  })).join('');
+}
+const mentionsMe = body => !!myNick() && new RegExp('(^|[^\\w@])@' + myNick() + '(?![a-z0-9_])', 'i').test(body || '');
+// кого можно упомянуть в этой переписке
+function mentionPeople() {
+  const k = S.chatWith;
+  const ids = isChatKey(k) ? chatMembersOf(k.slice(2)).map(m => m.user_id) : k ? [k] : (S.circle || []).map(m => m.user_id);
+  return ids.filter(id => id !== S.user.id && nickOf(id));
+}
+function closeMention() { const b = document.getElementById ? document.getElementById('fment') : null; if (b) b.remove(); }
+function mentionSuggest() {
+  const tx = $('#ftx');
+  if (!tx || typeof tx.selectionStart !== 'number' || !document.createElement) return closeMention();
+  const m = (tx.value || '').slice(0, tx.selectionStart).match(/(^|\s)@([a-z0-9_]{0,32})$/i);
+  if (!m) return closeMention();
+  const q = m[2].toLowerCase();
+  const list = mentionPeople().filter(id => nickOf(id).startsWith(q) || vnorm(nameOf(id)).startsWith(vnorm(q))).slice(0, 6);
+  if (!list.length) return closeMention();
+  let box = document.getElementById('fment');
+  if (!box) { box = document.createElement('div'); box.id = 'fment'; box.className = 'fpop fmentpop'; document.body.appendChild(box); }
+  box.innerHTML = list.map(id => `<button data-mn="${esc(nickOf(id))}"><b>${esc(nameOf(id))}</b><span>@${esc(nickOf(id))}</span></button>`).join('');
+  if (box.querySelectorAll) box.querySelectorAll('[data-mn]').forEach(b => { b.onpointerdown = e => e.preventDefault(); b.onclick = () => pickMention(b.dataset.mn, q.length); });
+  const bar = document.querySelector('.fbar');
+  if (bar && bar.getBoundingClientRect && box.style) {
+    const r = bar.getBoundingClientRect();
+    box.style.left = Math.round(Math.max(8, r.left)) + 'px';
+    box.style.top = Math.round(Math.max(8, r.top - (box.offsetHeight || 120) - 4)) + 'px';
+  }
+}
+function pickMention(nick, qlen) {
+  const tx = $('#ftx');
+  if (!tx) return;
+  const s = typeof tx.selectionStart === 'number' ? tx.selectionStart : (tx.value || '').length, v = tx.value || '';
+  const start = Math.max(0, s - qlen - 1);
+  tx.value = v.slice(0, start) + '@' + nick + ' ' + v.slice(s);
+  const pos = start + nick.length + 2;
+  if (tx.setSelectionRange) try { tx.setSelectionRange(pos, pos); } catch (e) {}
+  closeMention();
+  if (tx.focus) tx.focus();
+}
+
+// ---- главный экран и настройки пользователя мессенджера ----
+function renderMsgrHome() {
+  const tt = typeof todayTasks === 'function' && S.tasksReady ? todayTasks().length : 0;
+  return `<div class="hello-row"><h1 class="hello"><small class="jp jpf" lang="ja">${jpGreeting()}</small>${greeting()}, ${esc(S.me.name)}</h1>
+    ${GEAR_BTN}</div>
+  <div class="grid">
+    <button class="tile t7 wide" data-t="chat">${ICONS.chat}<div><b>Чаты</b><span id="chatsub">${chatSub()}</span></div></button>
+    <button class="tile t6 wide" data-t="todo">${ICONS.todo.replace('{{D}}', new Date().getDate())}<div><b>Дела</b><span>${tt ? 'На сегодня: ' + tt : 'Календарь и список дел'}</span></div></button>
+  </div>
+  ${renderKotowaza()}`.replace(/<button class="tile ([^"]*)" data-t="(\w+)"( id="\w+")?>/g, (m, c, t) => KANJI[t] ? `${m}<em class="tkj jpf" lang="ja" aria-hidden="true">${KANJI[t]}</em>` : m);
+}
+function renderMsgrSettings() {
+  return `<div class="card"><div class="mute">Вы</div><b>${esc(S.me.name)}</b> <span class="mute">· ${esc(S.user.email)}</span></div>
+  ${nickCard()}
+  <div class="card"><b>Уведомления</b>
+    <div class="mute">О новых сообщениях и упоминаниях, о делах на сегодня и за час до дела со временем.</div>
+    <div id="pushbox"><div class="mute" style="margin-top:8px">Проверяем…</div></div></div>
+  <div class="card"><label class="chk" style="margin:0;color:var(--ink)"><input type="checkbox" id="snd"${soundOn() ? ' checked' : ''}><span>Звук кнопок и вкладок</span></label>
+    <div class="mute">Настройка действует только на этом телефоне.</div></div>
+  <div class="card"><b>Оформление</b> <span class="jpf mute" lang="ja">季節</span>
+    <select id="season">${Object.entries(SEASONS).map(([k, l]) => `<option value="${k}"${k === seasonPick() ? ' selected' : ''}>${esc(l)}${k === 'auto' ? ' (сейчас: ' + SEASONS[seasonNow()].split(':')[0].toLowerCase() + ')' : ''}</option>`).join('')}</select></div>
+  <button class="ghost full" id="lo">Выйти</button>`;
 }
 
 // ---------- голосовой помощник ----------
