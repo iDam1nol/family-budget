@@ -878,7 +878,7 @@ function startPolling() {
 function subscribe() {
   startPolling();
   if (typeof window.addEventListener === 'function') window.addEventListener('online', () => { if (S.me) refresh(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me) refresh(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.me) refresh(); updateBadge(true); });
   if (PROXY_MODE) return;                    // через proxy.php нет realtime: данные подтягиваются опросом
   let timer = null;
   const soon = () => { clearTimeout(timer); timer = setTimeout(refresh, 300); };
@@ -1229,6 +1229,7 @@ window.addEventListener('popstate', e => {
 const monthBar = () => `<div class="monthbar"><button class="ghost" id="pm">‹</button><b>${esc(monthLabel())}</b><button class="ghost" id="nm">›</button></div>`;
 
 function render() {
+  updateBadge();
   if (document.getElementById && document.getElementById('femopop')) closeEmo();
   if (isRel() && !REL_TABS.includes(S.tab)) S.tab = 'home';
   if (isMsgr() && !MSG_TABS.includes(S.tab)) S.tab = 'home';
@@ -4104,9 +4105,10 @@ async function loadMsgs() {
   const pend = S.msgs.filter(x => x._pending && !(r.data || []).some(y => y.id === x.id));
   setMsgs(r);
   S.msgs = S.msgs.concat(pend);
-  if (S.msgs.map(x => x.id).join() === before) return;
+  if (S.msgs.map(x => x.id).join() === before) return updateBadge();
   if (S.tab === 'chat') drawFam();
   else if ($('#chatsub')) $('#chatsub').textContent = chatSub();
+  updateBadge();
 }
 async function refreshRel(opts = {}) {
   const [m, ph, fm, tq] = await Promise.all([
@@ -4152,6 +4154,18 @@ function famMarkSeen() {
   if (!last) return;
   const seen = famSeenMap(); seen[key] = last.created_at; lsSet('fb_fam_seen2', seen);
   if (!key) { try { localStorage.setItem('fb_fam_seen', last.created_at); } catch (e) {} }
+  updateBadge();
+}
+// красное число на значке приложения (iPhone с iOS 16.4+, если приложение на экране «Домой» и уведомления разрешены; Android — точка или число, как умеет телефон).
+// Число знает только телефон (отметки прочитанного — на нём), поэтому оно же сохраняется для sw.js:
+// пришло уведомление о сообщении, когда приложение закрыто, — sw.js прибавляет 1.
+let badgeLast = -1;
+function updateBadge(force) {
+  const n = S.user && S.msgsReady ? famUnread() : 0;
+  if (n === badgeLast && !force) return;
+  badgeLast = n;
+  try { if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } catch (e) {}
+  try { if (window.caches) caches.open('fb-badge').then(c => c.put('n', new Response(String(n)))).catch(() => {}); } catch (e) {}
 }
 function chatSub() {
   if (!S.msgsReady) return 'нужно обновить базу';
@@ -5767,7 +5781,7 @@ function storedUser() {
     return;
   }
   sb.auth.onAuthStateChange((ev, session) => {
-    if (ev === 'SIGNED_OUT') { S.user = null; S.me = null; renderAuth(); }
+    if (ev === 'SIGNED_OUT') { S.user = null; S.me = null; updateBadge(true); renderAuth(); }
     else if (session && (!S.user || S.user.id !== session.user.id)) { S.user = session.user; load(); }
   });
   if (typeof navigator.serviceWorker === 'object' && /^https?:$/.test(location.protocol)) {

@@ -1,14 +1,14 @@
 // Сервис-воркер: приложение открывается даже без интернета и при плохой связи.
 // Файлы самого приложения: сначала сеть (чтобы приходили обновления), если она не отвечает 4 секунды, берём сохранённую копию.
 // Данные (proxy.php, supabase.co) никогда не кэшируются: за них отвечает приложение.
-const V = 'fb-v16';
+const V = 'fb-v17';
 const SHELL = ['./', 'index.html', 'manifest.json', 'supabase.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V && k !== 'fb-badge').map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 const withTimeout = (p, ms) => new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('timeout')), ms); p.then(v => { clearTimeout(t); res(v); }, e => { clearTimeout(t); rej(e); }); });
@@ -47,10 +47,21 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Семья', {
+  e.waitUntil(Promise.all([self.registration.showNotification(d.title || 'Семья', {
     body: d.body || '', tag: d.tag || 'family', renotify: true, data: { url: d.url || './' }, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png'
-  }));
+  }), /[?&]chat=/.test(d.url || '') ? bumpBadge() : null]));
 });
+// новое сообщение, а приложение закрыто: красное число на значке +1 (когда приложение откроется, оно пересчитает точно)
+async function bumpBadge() {
+  try {
+    const open = await self.clients.matchAll({ type: 'window' });
+    if (open.some(c => c.visibilityState === 'visible')) return;    // приложение на экране — оно само всё посчитает
+    const c = await caches.open('fb-badge'), r = await c.match('n');
+    const n = (r ? parseInt(await r.text(), 10) || 0 : 0) + 1;
+    await c.put('n', new Response(String(n)));
+    if (self.navigator.setAppBadge) await self.navigator.setAppBadge(n);
+  } catch (e) {}
+}
 // нажатие на уведомление: открыть приложение (или переключиться на уже открытое)
 self.addEventListener('notificationclick', e => {
   e.notification.close();
